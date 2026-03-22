@@ -394,8 +394,9 @@ export class FigmaClient {
       const hugHeight = hug === 'both' || hug === 'h' || hug === 'height';
       const clip = props.clip === 'true' || props.clip === true;
 
-      const alignMap = { start: 'MIN', center: 'CENTER', end: 'MAX', stretch: 'STRETCH' };
-      const alignVal = alignMap[align] || 'MIN';
+      const alignMap = { start: 'MIN', center: 'CENTER', end: 'MAX' };
+      const counterAlignMap = { start: 'MIN', center: 'CENTER', end: 'MAX', stretch: 'MIN' };
+      const alignVal = counterAlignMap[align] || 'MIN';
       const justifyVal = alignMap[justify] || 'MIN';
 
       const fillCode = this.generateFillCode(bg, `f${frameIdx}`);
@@ -450,7 +451,7 @@ export class FigmaClient {
             const fItems = item.items || 'center';
             const justifyMap = { start: 'MIN', center: 'CENTER', end: 'MAX', between: 'SPACE_BETWEEN' };
             const fJustifyVal = justifyMap[fJustify] || 'CENTER';
-            const fItemsVal = alignMap[fItems] || 'CENTER';
+            const fItemsVal = counterAlignMap[fItems] || 'CENTER';
             const fFillCode = fBg ? this.generateFillCode(fBg, `el${idx}`) : { code: `el${idx}.fills = [];`, usesVars: false };
             const fStrokeCode = fStroke ? this.generateStrokeCode(fStroke, `el${idx}`) : { code: '' };
             const nestedChildren = item._children ? generateChildCode(item._children, `el${idx}`, fFlex) : '';
@@ -741,7 +742,7 @@ export class FigmaClient {
     }
 
     // Parse self-closing Slot elements
-    const slotSelfCloseRegex = /<Slot(?:\s+([^/]*?))?\s*\/>/g;
+    const slotSelfCloseRegex = /<Slot(?:\s+([\s\S]*?))?\s*\/>/g;
     while ((match = slotSelfCloseRegex.exec(childrenStr)) !== null) {
       const idx = match.index;
       const insideFrame = frameRanges.some(r => idx >= r.start && idx < r.end);
@@ -787,7 +788,7 @@ export class FigmaClient {
     }
 
     // Parse Image elements (self-closing) - creates placeholder rectangle
-    const imageRegex = /<Image\s+([^/]*)\s*\/>/g;
+    const imageRegex = /<Image(?:\s+([\s\S]*?))?\s*\/>/g;
     while ((match = imageRegex.exec(childrenStr)) !== null) {
       const idx = match.index;
       const insideFrame = frameRanges.some(r => idx >= r.start && idx < r.end);
@@ -800,7 +801,7 @@ export class FigmaClient {
     }
 
     // Parse Icon elements (self-closing) - creates placeholder
-    const iconRegex = /<Icon\s+([^/]*)\s*\/>/g;
+    const iconRegex = /<Icon(?:\s+([\s\S]*?))?\s*\/>/g;
     while ((match = iconRegex.exec(childrenStr)) !== null) {
       const idx = match.index;
       const insideFrame = frameRanges.some(r => idx >= r.start && idx < r.end);
@@ -813,7 +814,7 @@ export class FigmaClient {
     }
 
     // Parse Instance elements (self-closing) - creates component instance
-    const instanceRegex = /<Instance\s+([^/]*)\s*\/>/g;
+    const instanceRegex = /<Instance(?:\s+([\s\S]*?))?\s*\/>/g;
     while ((match = instanceRegex.exec(childrenStr)) !== null) {
       const idx = match.index;
       const insideFrame = frameRanges.some(r => idx >= r.start && idx < r.end);
@@ -876,6 +877,11 @@ export class FigmaClient {
     // Check root frame for var usage
     checkVarUsage(bg);
     if (stroke) checkVarUsage(stroke);
+    checkVarUsage(rounded);
+    checkVarUsage(gap);
+    checkVarUsage(p);
+    checkVarUsage(px);
+    checkVarUsage(py);
 
     // Collect all fonts and check variable usage recursively
     const fonts = new Set();
@@ -892,10 +898,23 @@ export class FigmaClient {
           const fStroke = item.stroke || null;
           if (fBg) checkVarUsage(fBg);
           if (fStroke) checkVarUsage(fStroke);
+          checkVarUsage(item.rounded);
+          checkVarUsage(item.radius);
+          checkVarUsage(item.gap);
+          checkVarUsage(item.p);
+          checkVarUsage(item.padding);
+          checkVarUsage(item.px);
+          checkVarUsage(item.py);
+          checkVarUsage(item.pt);
+          checkVarUsage(item.pr);
+          checkVarUsage(item.pb);
+          checkVarUsage(item.pl);
           if (item._children) collectFontsAndVars(item._children);
         } else if (item._type === 'rect' || item._type === 'image' || item._type === 'icon') {
           const itemBg = item.bg || item.fill || item.color || item.c || '#e4e4e7';
           checkVarUsage(itemBg);
+          checkVarUsage(item.rounded);
+          checkVarUsage(item.radius);
         }
       });
     };
@@ -914,7 +933,7 @@ export class FigmaClient {
           const style = weight === 'bold' ? 'Bold' : weight === 'medium' ? 'Medium' : weight === 'semibold' ? 'Semi Bold' : 'Regular';
           const size = item.size || 14;
           const color = item.color || '#000000';
-          const fillWidth = item.w === 'fill';
+          const fillWidth = item.w === 'fill' || (item.w === undefined && item.width === undefined && parentFlex === 'col');
           const textFillCode = this.generateFillCode(color, `el${idx}`);
 
           return `
@@ -941,10 +960,10 @@ export class FigmaClient {
           const fPx = item.px !== undefined ? item.px : (fP !== null ? fP : 0);
           const fPy = item.py !== undefined ? item.py : (fP !== null ? fP : 0);
           // Individual padding overrides (pt, pr, pb, pl)
-          const fPt = item.pt !== undefined ? Number(item.pt) : Number(fPy);
-          const fPr = item.pr !== undefined ? Number(item.pr) : Number(fPx);
-          const fPb = item.pb !== undefined ? Number(item.pb) : Number(fPy);
-          const fPl = item.pl !== undefined ? Number(item.pl) : Number(fPx);
+          const fPt = item.pt !== undefined ? item.pt : fPy;
+          const fPr = item.pr !== undefined ? item.pr : fPx;
+          const fPb = item.pb !== undefined ? item.pb : fPy;
+          const fPl = item.pl !== undefined ? item.pl : fPx;
           const fAlign = item.align || 'center';
           const fJustify = item.justify || 'center';
           // Clip defaults to false for nested frames (overflow="hidden" also sets clip)
@@ -969,16 +988,24 @@ export class FigmaClient {
           const fHeight = fillHeight ? 100 : (item.h || item.height || 40);
 
           // Map align/justify to Figma values
-          const alignMap = { start: 'MIN', center: 'CENTER', end: 'MAX', stretch: 'STRETCH' };
-          const fAlignVal = alignMap[fAlign] || 'CENTER';
+          const alignMap = { start: 'MIN', center: 'CENTER', end: 'MAX', between: 'SPACE_BETWEEN' };
+          const counterAlignMap = { start: 'MIN', center: 'CENTER', end: 'MAX', stretch: 'MIN' };
+          const fAlignVal = counterAlignMap[fAlign] || 'CENTER';
           const fJustifyVal = alignMap[fJustify] || 'CENTER';
 
           const nestedChildren = item._children ? generateChildCode(item._children, `el${idx}`, fFlex) : '';
           const frameFillCode = fBg ? this.generateFillCode(fBg, `el${idx}`) : { code: `el${idx}.fills = [];`, usesVars: false };
           const frameStrokeCode = fStroke ? this.generateStrokeCode(fStroke, `el${idx}`, fStrokeWidth, fStrokeAlign) : { code: '' };
+          const radiusCode = this.generateNumericPropCode(fRounded, `el${idx}`, 'cornerRadius');
+          const gapCode = this.generateNumericPropCode(fGap, `el${idx}`, 'itemSpacing');
+          const ptCode = this.generateNumericPropCode(fPt, `el${idx}`, 'paddingTop');
+          const prCode = this.generateNumericPropCode(fPr, `el${idx}`, 'paddingRight');
+          const pbCode = this.generateNumericPropCode(fPb, `el${idx}`, 'paddingBottom');
+          const plCode = this.generateNumericPropCode(fPl, `el${idx}`, 'paddingLeft');
 
           // Determine sizing: FILL, FIXED, or HUG for each axis
-          const wantFillH = fillWidth || (fGrow !== null && parentFlex === 'row');
+          const defaultFillH = !fillWidth && !hasWidth && parentFlex === 'col' && fPosition !== 'absolute';
+          const wantFillH = fillWidth || (fGrow !== null && parentFlex === 'row') || defaultFillH;
           const wantFillV = fillHeight || (fGrow !== null && parentFlex === 'col');
           const hSizing = wantFillH ? 'FILL' : (hasWidth ? 'FIXED' : 'HUG');
           const vSizing = wantFillV ? 'FILL' : (hasHeight ? 'FIXED' : 'HUG');
@@ -990,18 +1017,19 @@ export class FigmaClient {
         el${idx}.layoutMode = '${fFlex === 'row' ? 'HORIZONTAL' : 'VERTICAL'}';
         ${fWrap && fFlex === 'row' ? `el${idx}.layoutWrap = 'WRAP';` : ''}
         ${hasWidth || hasHeight ? `el${idx}.resize(${hasWidth ? fWidth : 100}, ${hasHeight ? fHeight : 100});` : ''}
-        el${idx}.itemSpacing = ${fGap};
-        el${idx}.paddingTop = ${fPt};
-        el${idx}.paddingBottom = ${fPb};
-        el${idx}.paddingLeft = ${fPl};
-        el${idx}.paddingRight = ${fPr};
-        el${idx}.cornerRadius = ${fRounded};
+        ${radiusCode.code}
         ${frameFillCode.code}
         ${frameStrokeCode.code}
         el${idx}.primaryAxisAlignItems = '${fJustifyVal}';
         el${idx}.counterAxisAlignItems = '${fAlignVal}';
         el${idx}.clipsContent = ${fClip};
         ${parentVar}.appendChild(el${idx});
+        ${fGrow !== null && parentFlex === 'row' ? `el${idx}.layoutGrow = ${fGrow};` : ''}
+        ${gapCode.code}
+        ${ptCode.code}
+        ${pbCode.code}
+        ${plCode.code}
+        ${prCode.code}
         el${idx}.layoutSizingHorizontal = '${hSizing}';
         el${idx}.layoutSizingVertical = '${vSizing}';
         ${nestedChildren}
@@ -1015,12 +1043,13 @@ export class FigmaClient {
           const rRounded = item.rounded || item.radius || 0;
           const rName = item.name || 'Rectangle';
           const rectFillCode = this.generateFillCode(rBg, `el${idx}`);
+          const rectRadiusCode = this.generateNumericPropCode(rRounded, `el${idx}`, 'cornerRadius');
 
           return `
         const el${idx} = figma.createRectangle();
         el${idx}.name = ${JSON.stringify(rName)};
         el${idx}.resize(${rWidth}, ${rHeight});
-        el${idx}.cornerRadius = ${rRounded};
+        ${rectRadiusCode.code}
         ${rectFillCode.code}
         ${parentVar}.appendChild(el${idx});`;
         } else if (item._type === 'image') {
@@ -1031,12 +1060,13 @@ export class FigmaClient {
           const iRounded = item.rounded || item.radius || 8;
           const iName = item.name || 'Image';
           const imgFillCode = this.generateFillCode(iBg, `el${idx}`);
+          const imgRadiusCode = this.generateNumericPropCode(iRounded, `el${idx}`, 'cornerRadius');
 
           return `
         const el${idx} = figma.createRectangle();
         el${idx}.name = ${JSON.stringify(iName)};
         el${idx}.resize(${iWidth}, ${iHeight});
-        el${idx}.cornerRadius = ${iRounded};
+        ${imgRadiusCode.code}
         ${imgFillCode.code}
         ${parentVar}.appendChild(el${idx});`;
         } else if (item._type === 'icon') {
@@ -1164,8 +1194,9 @@ export class FigmaClient {
     const childCode = generateChildCode(children, 'frame', flex);
 
     // Map align/justify to Figma values for root frame
-    const alignMap = { start: 'MIN', center: 'CENTER', end: 'MAX', stretch: 'STRETCH' };
-    const alignVal = alignMap[align] || 'MIN';
+    const alignMap = { start: 'MIN', center: 'CENTER', end: 'MAX' };
+    const counterAlignMap = { start: 'MIN', center: 'CENTER', end: 'MAX', stretch: 'MIN' };
+    const alignVal = counterAlignMap[align] || 'MIN';
     const justifyVal = alignMap[justify] || 'MIN';
 
     // Smart positioning code
@@ -1185,15 +1216,22 @@ export class FigmaClient {
     // Generate fill/stroke code for root frame
     const rootFillCode = this.generateFillCode(bg, 'frame');
     const rootStrokeCode = stroke ? this.generateStrokeCode(stroke, 'frame', strokeWidth, strokeAlignProp) : { code: '', usesVars: false };
+    const rootRadiusCode = this.generateNumericPropCode(rounded, 'frame', 'cornerRadius');
+    const rootGapCode = this.generateNumericPropCode(gap, 'frame', 'itemSpacing');
+    const rootPtCode = this.generateNumericPropCode(py, 'frame', 'paddingTop');
+    const rootPbCode = this.generateNumericPropCode(py, 'frame', 'paddingBottom');
+    const rootPlCode = this.generateNumericPropCode(px, 'frame', 'paddingLeft');
+    const rootPrCode = this.generateNumericPropCode(px, 'frame', 'paddingRight');
 
     // Variable loading code with caching (only if any vars used)
     const varLoadCode = usesVars ? `
-        // Load shadcn variables (cached for 30s)
+        // Load design token variables (cached for 30s)
         if (!globalThis.__varsCache || Date.now() - (globalThis.__varsCacheTime || 0) > 30000) {
           const collections = await figma.variables.getLocalVariableCollectionsAsync();
           globalThis.__varsCache = {};
           for (const col of collections) {
-            if (!col.name.startsWith('shadcn')) continue;
+            const colName = col.name.toLowerCase();
+            if (!colName.startsWith('shadcn') && !colName.startsWith('spacing') && !colName.startsWith('radii')) continue;
             for (const id of col.variableIds) {
               const v = await figma.variables.getVariableByIdAsync(id);
               if (v) globalThis.__varsCache[v.name] = v;
@@ -1232,23 +1270,24 @@ export class FigmaClient {
         ${smartPosCode}
 
         let __currentNode = 'root';
+        let frame = null;
         try {
-        const frame = figma.createFrame();
+        frame = figma.createFrame();
         __currentNode = ${JSON.stringify(name)};
         frame.name = ${JSON.stringify(name)};
         frame.resize(${width}, ${height});
         frame.x = smartX;
         frame.y = ${y};
-        frame.cornerRadius = ${rounded};
+        ${rootRadiusCode.code}
         ${rootFillCode.code}
         ${rootStrokeCode.code}
         frame.layoutMode = '${flex === 'row' ? 'HORIZONTAL' : 'VERTICAL'}';
         ${wrap && flex === 'row' ? `frame.layoutWrap = 'WRAP';` : ''}
-        frame.itemSpacing = ${gap};
-        frame.paddingTop = ${py};
-        frame.paddingBottom = ${py};
-        frame.paddingLeft = ${px};
-        frame.paddingRight = ${px};
+        ${rootGapCode.code}
+        ${rootPtCode.code}
+        ${rootPbCode.code}
+        ${rootPlCode.code}
+        ${rootPrCode.code}
         frame.primaryAxisAlignItems = '${justifyVal}';
         frame.counterAxisAlignItems = '${alignVal}';
         frame.primaryAxisSizingMode = '${flex === 'col' ? (hugHeight || fillHeight || !hasExplicitHeight ? 'AUTO' : 'FIXED') : (hugWidth || fillWidth || !hasExplicitWidth ? 'AUTO' : 'FIXED')}';
@@ -1262,7 +1301,7 @@ export class FigmaClient {
 
         return { id: frame.id, name: frame.name };
         } catch(e) {
-          frame.remove();
+          if (frame) frame.remove();
           throw new Error('[Node: ' + __currentNode + '] ' + e.message);
         }
       })()
@@ -1332,6 +1371,25 @@ export class FigmaClient {
         usesVars: false
       };
     }
+  }
+
+  /**
+   * Generate numeric property code - either raw number or bound variable
+   * Returns { code: string, usesVars: boolean }
+   */
+  generateNumericPropCode(value, elementVar, property) {
+    if (this.isVarRef(value)) {
+      const varName = this.getVarName(value);
+      return {
+        code: `${elementVar}.setBoundVariable('${property}', vars['${varName}']);`,
+        usesVars: true
+      };
+    }
+    const numericValue = Number(value || 0);
+    return {
+      code: `${elementVar}.${property} = ${numericValue};`,
+      usesVars: false
+    };
   }
 
   /**

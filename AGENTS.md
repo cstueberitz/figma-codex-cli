@@ -17,7 +17,11 @@ This CLI talks to Figma Desktop directly. No REST API key is required.
 |-----------|---------|
 | "connect to figma" | `node src/index.js connect` |
 | "add shadcn colors" | `node src/index.js tokens preset shadcn` |
+| "add dark palette" | `node src/index.js tokens preset dark` |
 | "add tailwind colors" | `node src/index.js tokens tailwind` |
+| "add compact/comfortable spacing" | `node src/index.js tokens spacing --preset power` |
+| "switch theme to dark" | `node src/index.js tokens mode theme dark` |
+| "switch spacing to comfortable" | `node src/index.js tokens mode spacing comfortable` |
 | "show colors on canvas" | `node src/index.js var visualize` |
 | "create dashboard" | `node src/index.js blocks create dashboard-01` |
 | "list blocks" | `node src/index.js blocks list` |
@@ -34,6 +38,8 @@ This CLI talks to Figma Desktop directly. No REST API key is required.
 | "list slots" | `node src/index.js slot list` |
 | "reset slot" | `node src/index.js slot reset` |
 | "verify creation" | `node src/index.js verify` |
+| "run a health check" | `node src/index.js doctor` |
+| "run a smoke test" | `node src/index.js smoke` |
 
 **Full command reference:** See REFERENCE.md
 
@@ -91,12 +97,35 @@ Block source files: `src/blocks/`
 
 "Add shadcn colors":
 ```bash
-node src/index.js tokens preset shadcn   # 244 primitives + 32 semantic (Light/Dark)
+node src/index.js tokens preset shadcn   # 244 primitives + 32 semantic (Light/Dark, falls back to Light-only in single-mode files)
+```
+
+"Add dark semantic palette":
+```bash
+node src/index.js tokens preset dark     # 23 dark semantic colors in a single collection
 ```
 
 "Add tailwind colors":
 ```bash
 node src/index.js tokens tailwind        # 242 primitive colors only
+```
+
+"Add spacing preset":
+```bash
+node src/index.js tokens spacing --preset power   # Compact/Comfortable spacing ladder
+```
+
+"Add radius preset":
+```bash
+node src/index.js tokens radii                    # Primitive radius scale + semantic aliases
+```
+
+"Switch active theme or spacing":
+```bash
+node src/index.js tokens mode theme dark
+node src/index.js tokens mode theme light
+node src/index.js tokens mode spacing comfortable
+node src/index.js tokens mode spacing compact
 ```
 
 "Create design system":
@@ -105,8 +134,12 @@ node src/index.js tokens ds              # IDS Base colors
 ```
 
 **shadcn vs tailwind:**
-- `tokens preset shadcn` = Full shadcn system (primitives + semantic tokens with Light/Dark mode)
+- `tokens preset shadcn` = Full shadcn system (primitives + semantic tokens with Light/Dark mode when available)
+- `tokens preset dark` = A single dark-ready semantic palette for one-mode files or fast dark UI work
 - `tokens tailwind` = Just the Tailwind color palette (primitives only)
+- `tokens spacing --preset power` = Power-style spacing ladder with Compact/Comfortable modes when the file supports them
+- `tokens radii` = Primitive radius scale plus semantic aliases like `radius/card`, `radius/button`, and `radius/input`
+- `tokens mode ...` = Applies a real variable mode when the file allows it, or swaps the active starter fallback values when it does not
 
 "Delete all variables":
 ```bash
@@ -115,12 +148,13 @@ node src/index.js var delete-all -c "primitives"    # Only specific collection
 ```
 
 **Note:** `var list` only SHOWS existing variables. Use `tokens` commands to CREATE them.
+If a `var:` binding references missing local variables, the CLI asks before bootstrapping the needed presets. For a fresh setup, do not assume automatic opt-in.
 
 ---
 
 ## Fast Variable Binding (var: syntax)
 
-Use `var:name` syntax to bind variables directly at creation time (currently searches shadcn collections):
+Use `var:name` syntax to bind variables directly at creation time. If the referenced variables are missing, the CLI prompts before creating the matching presets:
 
 ### Create Commands with var:
 ```bash
@@ -146,7 +180,7 @@ node src/index.js set fill "var:primary"
 node src/index.js set stroke "var:border"
 ```
 
-**Variables:** `background`, `foreground`, `card`, `primary`, `secondary`, `muted`, `accent`, `border`, and their `-foreground` variants.
+**Variables:** `background`, `foreground`, `card`, `primary`, `secondary`, `muted`, `accent`, `border`, `space/...`, `radius/card`, `radius/button`, `radius/input`, `radius/image`, and related `-foreground` variants.
 
 ---
 
@@ -163,7 +197,7 @@ Uses plugin, no Figma modification. Start plugin each session.
 ```bash
 node src/index.js connect --safe
 ```
-Then: Plugins → Development → FigCli
+Then: Plugins → Development → Figma Codex CLI
 
 **Safe Mode Notes:**
 - All commands work via daemon (no figma-use dependency)

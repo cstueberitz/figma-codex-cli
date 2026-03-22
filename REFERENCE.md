@@ -9,8 +9,16 @@ Full command reference for the Figma CLI. For quick start, see AGENTS.md.
 ```bash
 node src/index.js tokens ds              # IDS Base colors
 node src/index.js tokens tailwind        # Tailwind 22 color families (242 vars)
-node src/index.js tokens spacing         # Spacing tokens
+node src/index.js tokens preset shadcn   # shadcn primitives + semantic colors
+node src/index.js tokens preset dark     # Dark semantic palette
+node src/index.js tokens spacing         # Base spacing tokens
+node src/index.js tokens spacing --preset power   # Compact/Comfortable spacing preset
+node src/index.js tokens radii           # Primitive radius scale + semantic aliases
+node src/index.js tokens mode theme dark
+node src/index.js tokens mode spacing comfortable
 ```
+
+If a command uses `var:` bindings and the needed local variables are missing, the CLI asks before running the matching presets. Fresh installs are not opted in automatically.
 
 ### Manage Variables
 
@@ -50,7 +58,7 @@ node src/index.js create component "Button"
 
 ### Create with Variable Binding (Fast)
 
-Use `var:name` syntax to bind shadcn variables at creation time:
+Use `var:name` syntax to bind shadcn and spacing variables at creation time. If the referenced variables do not exist yet, the CLI prompts before bootstrapping them:
 
 ```bash
 node src/index.js create rect "Card" --fill "var:card" --stroke "var:border"
@@ -73,7 +81,7 @@ node src/index.js render '<Frame name="Card" w={320} h={180} bg="#fff" rounded={
 
 ### Render with Variable Binding (Fast)
 
-Use `var:name` syntax to bind shadcn variables at creation time (no separate bind commands needed):
+Use `var:name` syntax to bind shadcn and spacing variables at creation time (no separate bind commands needed). Missing presets trigger a confirmation prompt first:
 
 ```bash
 node src/index.js render '<Frame name="Card" w={320} h={180} bg="var:card" stroke="var:border" rounded={16} flex="col" gap={8} p={24}>
@@ -85,7 +93,7 @@ node src/index.js render '<Frame name="Card" w={320} h={180} bg="var:card" strok
 </Frame>'
 ```
 
-Variables: `background`, `foreground`, `card`, `primary`, `secondary`, `muted`, `accent`, `border`, and their `-foreground` variants.
+Variables: `background`, `foreground`, `card`, `primary`, `secondary`, `muted`, `accent`, `border`, `space/...`, `radius/card`, `radius/button`, `radius/input`, and their `-foreground` variants.
 
 ### Render Batch (Multiple Frames)
 
@@ -259,6 +267,8 @@ Shape types: `ROUNDED_RECTANGLE`, `RECTANGLE`, `ELLIPSE`, `DIAMOND`, `TRIANGLE_U
 ```bash
 node src/index.js connect                  # Connect (Yolo Mode)
 node src/index.js connect --safe           # Connect (Safe Mode, plugin)
+node src/index.js doctor                   # First-run health check
+node src/index.js smoke                    # End-to-end render smoke test
 node src/index.js daemon status            # Check daemon status
 node src/index.js daemon status --debug    # Detailed token & connection info
 node src/index.js daemon diagnose          # Full diagnostic (troubleshooting)
