@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <b>Control Figma Desktop with Codex.</b><br>
-  Full read/write access. No API key required.<br>
-  Just talk to Codex about your designs.
+  <b>Use Codex as a working companion for Figma Desktop.</b><br>
+  Create, inspect, and modify files in Figma without a REST API key.<br>
+  Describe the change you want and let Codex drive the CLI.
 </p>
 
 ```
@@ -24,7 +24,7 @@
 
 ## What is This?
 
-A CLI that connects directly to Figma Desktop and gives you complete control:
+This project connects a local CLI to Figma Desktop so Codex can operate on the open file directly:
 
 - **shadcn/ui Components** — Generate all 30 official shadcn components with real Lucide icons and variable binding
 - **Design Tokens** — Create variables, collections, modes (Light/Dark), bind to nodes
@@ -35,13 +35,13 @@ A CLI that connects directly to Figma Desktop and gives you complete control:
 - **Lint & Accessibility** — Contrast checker, touch targets, design rules
 - **Export** — PNG, SVG, JSX, Storybook stories, CSS variables, Tailwind config
 - **Batch Operations** — Rename layers, find/replace text, create 100 variables at once
-- **Works with Codex** — Just ask in natural language, Codex knows all commands
+- **Codex-friendly workflow** — Repo instructions and launcher are set up so Codex can use the commands with minimal hand-holding
 
 ---
 
 ## shadcn/ui Component Package
 
-Generate production-ready shadcn/ui components directly in Figma. All 30 components with 58 variants, matching the official shadcn/ui specs.
+Build a complete shadcn/ui component pack directly inside Figma. The package includes 30 components and 58 ready-to-use variants aligned with the official system.
 
 ### Quick Start
 
@@ -128,15 +128,15 @@ All components use `var:` syntax to bind directly to shadcn variables. When you 
 
 ## Why This CLI?
 
-This project includes an `AGENTS.md` file that Codex reads automatically. It contains:
+This repo ships with an `AGENTS.md` file that gives Codex project-specific operating context. It covers:
 
-- All available commands and their syntax
-- Best practices (e.g., "use `render` for text-heavy designs")
-- Common requests mapped to solutions
+- The command surface and common invocation patterns
+- Preferred workflows and implementation shortcuts
+- Plain-language requests mapped to concrete CLI actions
 
-**Want to teach Codex new tricks?** Just update `AGENTS.md`. No code changes needed.
+**Want to adjust how Codex works in this repo?** Update `AGENTS.md`. In many cases, no code change is needed.
 
-**Example:** You type "Create Tailwind colors" -> Codex already knows to run `node src/index.js tokens tailwind` because it's documented in `AGENTS.md`.
+**Example:** If you ask for a Tailwind palette, Codex can infer `node src/index.js tokens tailwind` from the repo instructions.
 
 ---
 
@@ -160,19 +160,19 @@ npm run setup-alias
 source ~/.zshrc
 ```
 
-That's it. Now open a **new terminal** and type:
+Once that is done, open a **new terminal** and run:
 
 ```bash
 fig-start
 ```
 
-This will:
+`fig-start` will:
 1. Start Figma (if not running)
 2. Connect to Figma (Yolo Mode: patches Figma once for direct access)
 3. Show your open Figma files: pick one with arrow keys
-4. Launch Codex with all commands pre-loaded
+4. Open Codex in the right working context
 
-**Done.** Talk to Codex about your Figma file.
+After that, you can work from prompts instead of remembering commands.
 
 > **Note:** `fig-start` works from any directory. The setup script saves the repo location to `~/.figma-codex-cli/config.json` and auto-migrates the older `~/.figma-cli/config.json` if present.
 
@@ -187,7 +187,7 @@ This will:
 
 ### Safe Mode (no patching)
 
-If you can't grant Full Disk Access or prefer not to patch Figma:
+Use this path if you do not want to patch Figma or cannot grant Full Disk Access:
 
 ```bash
 fig-start --safe
@@ -206,23 +206,23 @@ cd figma-codex-cli
 codex
 ```
 
-Then tell Codex: `Connect to Figma`
+Then prompt Codex with: `Connect to Figma`
 
 ---
 
 ## Using It
 
-Once connected, just talk to Codex:
+Once the connection is up, try prompts like:
 
-> "Add shadcn colors to my project"
+> "Set up shadcn tokens in this file"
 
-> "Add all shadcn components"
+> "Generate the full shadcn component set"
 
-> "Add a card component with button and input"
+> "Make a small card component with a title, field, and primary action"
 
-> "Check accessibility"
+> "Review this file for accessibility issues"
 
-> "Export variables as CSS"
+> "Export the current variables as CSS custom properties"
 
 The included `AGENTS.md` teaches Codex all commands automatically. No manual required.
 

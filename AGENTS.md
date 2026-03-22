@@ -1,15 +1,15 @@
 # figma-ds-cli
 
-Persistent instructions for Codex when working with this Figma CLI repo.
+Repository instructions for Codex while working inside this Figma CLI project.
 
 ## Codex Workflow
 
-- Treat this file as the primary workflow map for Figma and FigJam requests in this repository.
-- Prefer the documented `node src/index.js ...` commands over inventing ad-hoc flows.
-- Keep user-facing replies natural and concise. Do not dump raw terminal commands unless the user explicitly asks for them.
-- When launched via `fig-start`, assume the repo root is the working directory unless the script passed a different context.
+- Use this file as the main operating guide for Figma and FigJam tasks in this repo.
+- Prefer documented `node src/index.js ...` commands instead of improvising alternate flows.
+- Keep user-facing responses compact and natural. Only surface raw commands when the user asks for them.
+- When started through `fig-start`, assume the repo root is the default command context unless told otherwise.
 
-CLI that controls Figma Desktop directly. No API key needed.
+This CLI talks to Figma Desktop directly. No REST API key is required.
 
 ## Quick Reference
 
@@ -41,27 +41,27 @@ CLI that controls Figma Desktop directly. No API key needed.
 
 ## AI Verification (Internal)
 
-After creating any component, run `verify` to get a small screenshot for validation:
+After creating a visual node or component, run `verify` to capture a quick validation snapshot:
 
 ```bash
 node src/index.js verify              # Screenshot of selection
 node src/index.js verify "123:456"    # Screenshot of specific node
 ```
 
-Returns JSON with base64 image (max 2000px, auto-scaled to stay under API limits).
+The command returns JSON with a base64 image payload and automatically scales to stay within tool limits.
 
 **Always verify after:**
 - `render` or `render-batch`
 - `node to-component`
 - Any visual creation
 
-This is for internal AI checks, not shown to users.
+Use it as an internal confidence check rather than a user-facing artifact.
 
 ---
 
 ## Blocks (Pre-built UI Layouts)
 
-**ALWAYS use `blocks create` for dashboards and page layouts.** Never build them manually with render/eval.
+**Use `blocks create` first for dashboards and full-page layouts.** Avoid rebuilding those structures manually with `render` or `eval` unless necessary.
 
 ```bash
 node src/index.js blocks list                    # Show available blocks

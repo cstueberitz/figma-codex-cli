@@ -2,48 +2,159 @@
 <html>
 <head>
   <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f1ea;
+      --panel: rgba(255, 255, 255, 0.88);
+      --panel-border: rgba(124, 103, 74, 0.14);
+      --text: #1f1a17;
+      --muted: #6f6258;
+      --dot-idle: #b3aba3;
+      --dot-connecting: #d38b1f;
+      --dot-connected: #2e9a62;
+      --dot-error: #d25252;
+      --shadow: 0 10px 24px rgba(52, 38, 24, 0.12);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171311;
+        --panel: rgba(34, 28, 24, 0.94);
+        --panel-border: rgba(255, 255, 255, 0.08);
+        --text: #f6efe7;
+        --muted: #b9aca1;
+        --dot-idle: #5d534b;
+        --dot-connecting: #f0a533;
+        --dot-connected: #53c78b;
+        --dot-error: #ff7b72;
+        --shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+      }
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: Inter, -apple-system, sans-serif;
+      font-family: "SF Pro Text", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 11px;
-      background: #2c2c2c;
-      color: #fff;
+      background:
+        radial-gradient(circle at top left, rgba(232, 184, 121, 0.18), transparent 45%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.03)),
+        var(--bg);
+      color: var(--text);
       height: 100%;
       display: flex;
-      flex-direction: column;
-      padding: 10px 12px;
-      gap: 4px;
+      align-items: stretch;
+      padding: 10px;
+      overflow: hidden;
     }
-    .row {
+
+    .shell {
+      width: 100%;
+      height: 100%;
+      border-radius: 14px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      padding: 11px 12px 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .topline {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .eyebrow {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+
+    .title {
+      font-weight: 650;
+      font-size: 13px;
+      line-height: 1.1;
+    }
+
+    .badge {
+      flex-shrink: 0;
+      border-radius: 999px;
+      border: 1px solid var(--panel-border);
+      padding: 4px 7px;
+      font-size: 9px;
+      line-height: 1;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .status-row {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
+      padding: 8px 9px;
+      border-radius: 10px;
+      background: rgba(127, 127, 127, 0.08);
+      min-height: 42px;
     }
+
     .dot {
-      width: 8px;
-      height: 8px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
-      background: #666;
+      background: var(--dot-idle);
+      box-shadow: 0 0 0 4px rgba(127, 127, 127, 0.08);
     }
-    .dot.connecting { background: #f59e0b; animation: pulse 1s infinite; }
-    .dot.connected { background: #22c55e; }
-    .dot.error { background: #ef4444; }
+    .dot.connecting { background: var(--dot-connecting); animation: pulse 1s infinite; }
+    .dot.connected { background: var(--dot-connected); }
+    .dot.error { background: var(--dot-error); }
+
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.4; }
     }
-    .title { font-weight: 600; font-size: 12px; }
-    #status { color: #aaa; }
-    .hint { font-size: 9px; color: #666; margin-top: 2px; }
+
+    #status {
+      color: var(--text);
+      font-weight: 560;
+      line-height: 1.25;
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    .hint {
+      font-size: 9px;
+      color: var(--muted);
+      line-height: 1.25;
+      white-space: normal;
+      word-break: break-word;
+      max-width: 100%;
+    }
   </style>
 </head>
 <body>
-  <div class="title">Figma DS CLI</div>
-  <div class="row">
-    <div id="dot" class="dot connecting"></div>
-    <span id="status">Connecting...</span>
+  <div class="shell">
+    <div class="topline">
+      <div>
+        <div class="eyebrow">Plugin Bridge</div>
+        <div class="title">Figma Codex CLI</div>
+      </div>
+      <div class="badge">Safe Mode</div>
+    </div>
+
+    <div class="status-row">
+      <div id="dot" class="dot connecting"></div>
+      <span id="status">Looking for local daemon…</span>
+    </div>
+
+    <div class="hint">Keep this panel open while Codex stays connected.</div>
   </div>
-  <div class="hint">Keep this window open</div>
 
   <script>
     // Scan ports 3456-3460 in PARALLEL for fast connection
@@ -63,7 +174,7 @@
     function connectParallel() {
       if (ws && ws.readyState === WebSocket.OPEN) return;
 
-      setStatus('Scanning...', 'connecting');
+      setStatus('Looking for local daemon…', 'connecting');
       let connected = false;
       const attempts = [];
 
@@ -95,7 +206,7 @@
             ws.onclose = handleClose;
             ws.onerror = handleClose;
 
-            setStatus('Connected', 'connected');
+            setStatus('Connected to local bridge', 'connected');
             parent.postMessage({ pluginMessage: { type: 'connected' } }, '*');
 
             // Send hello
@@ -159,7 +270,7 @@
       // Only show reconnecting if we were the active connection
       if (ws && ws.readyState !== WebSocket.OPEN) {
         ws = null;
-        setStatus('Reconnecting...', 'connecting');
+        setStatus('Connection lost, retrying…', 'connecting');
         stopKeepalive();
         parent.postMessage({ pluginMessage: { type: 'disconnected' } }, '*');
 

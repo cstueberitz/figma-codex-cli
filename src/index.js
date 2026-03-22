@@ -812,11 +812,11 @@ program.action(async () => {
 });
 
 function showQuickStart() {
-  console.log(chalk.white('  Just ask Codex:\n'));
-  console.log(chalk.white('    "Add shadcn colors to my project"'));
-  console.log(chalk.white('    "Create a blue card with rounded corners"'));
-  console.log(chalk.white('    "Show me what\'s on the canvas"'));
-  console.log(chalk.white('    "Export this frame as PNG"'));
+  console.log(chalk.white('  Try prompts like:\n'));
+  console.log(chalk.white('    "Set up shadcn tokens in this file"'));
+  console.log(chalk.white('    "Build a compact card with a title and CTA"'));
+  console.log(chalk.white('    "Summarize what is currently on the canvas"'));
+  console.log(chalk.white('    "Export the selected frame as PNG"'));
   console.log();
   console.log(chalk.gray('  Learn more: ') + chalk.cyan('https://github.com/cstueberitz/figma-codex-cli\n'));
 }
@@ -925,11 +925,11 @@ program
     // Done!
     console.log(chalk.green('\n  ✓ Setup complete!\n'));
 
-    console.log(chalk.white('  Just ask Codex:\n'));
-    console.log(chalk.white('    "Add shadcn colors to my project"'));
-    console.log(chalk.white('    "Create a blue card with rounded corners"'));
-    console.log(chalk.white('    "Show me what\'s on the canvas"'));
-    console.log(chalk.white('    "Export this frame as PNG"'));
+    console.log(chalk.white('  Try prompts like:\n'));
+    console.log(chalk.white('    "Set up shadcn tokens in this file"'));
+    console.log(chalk.white('    "Build a compact card with a title and CTA"'));
+    console.log(chalk.white('    "Summarize what is currently on the canvas"'));
+    console.log(chalk.white('    "Export the selected frame as PNG"'));
     console.log();
     console.log(chalk.gray('  Learn more: ') + chalk.cyan('https://github.com/cstueberitz/figma-codex-cli\n'));
   });

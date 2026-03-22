@@ -1,5 +1,5 @@
 /**
- * Figma CLI Bridge Plugin
+ * Figma Codex CLI Bridge Plugin
  *
  * Safe Mode: Connects to CLI daemon via WebSocket
  * No debug port needed, no patching required.
@@ -7,8 +7,8 @@
 
 // Show minimal UI (needed for WebSocket connection)
 figma.showUI(__html__, {
-  width: 160,
-  height: 72,
+  width: 232,
+  height: 148,
   position: { x: -9999, y: 9999 }  // Bottom-left (push to far left)
 });
 
@@ -75,15 +75,15 @@ figma.ui.onmessage = async (msg) => {
   }
 
   if (msg.type === 'connected') {
-    figma.notify('✓ Figma DS CLI connected', { timeout: 2000 });
+    figma.notify('Figma Codex CLI connected', { timeout: 2000 });
   }
 
   if (msg.type === 'disconnected') {
-    figma.notify('Figma DS CLI disconnected', { timeout: 2000 });
+    figma.notify('Figma Codex CLI disconnected', { timeout: 2000 });
   }
 
   if (msg.type === 'error') {
-    figma.notify('Figma DS CLI: ' + msg.message, { error: true });
+    figma.notify('Figma Codex CLI: ' + msg.message, { error: true });
   }
 };
 
@@ -92,4 +92,4 @@ figma.on('close', () => {
   // Plugin closed
 });
 
-console.log('Figma DS CLI plugin started');
+console.log('Figma Codex CLI plugin started');

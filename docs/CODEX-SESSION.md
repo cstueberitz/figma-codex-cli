@@ -1,14 +1,14 @@
-# Codex Session Quick Reference
+# Codex Working Notes
 
 ## Project Overview
 
-`figma-ds-cli` is a CLI tool for managing Figma design systems. It connects to Figma Desktop via Chrome DevTools Protocol and executes JavaScript against the Figma Plugin API.
+`figma-ds-cli` is a local CLI for working with Figma design files. It connects through Chrome DevTools Protocol and runs JavaScript against the Figma Plugin API.
 
 **Location:** Repo root (the directory containing `src/index.js`)
 **npm package:** `figma-ds-cli` (v1.1.1)
 **GitHub:** https://github.com/cstueberitz/figma-codex-cli
 
-## Key Commands for Codex
+## Useful Commands
 
 ### Execute JavaScript in Figma
 
@@ -52,7 +52,7 @@ node src/index.js fj nodes
 node src/index.js fj eval "figma.currentPage.children.length"
 ```
 
-## Common Operations
+## Reusable Patterns
 
 ### Scale and Center Content
 
@@ -129,7 +129,7 @@ page.children.filter(n => n.name.startsWith('Stream-')).forEach((f, i) => {
 "
 ```
 
-## Important Notes
+## Things To Remember
 
 1. **Eval often returns no output** but code still executes. Verify with queries.
 
