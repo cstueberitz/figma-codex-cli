@@ -39,9 +39,53 @@ This project connects a local CLI to Figma Desktop so Codex can operate on the o
 
 ---
 
+## Quickstart
+
+If you just cloned the repo and want the fastest path to a working setup:
+
+```bash
+git clone https://github.com/cstueberitz/figma-codex-cli.git
+cd figma-codex-cli
+npm install
+npm run setup-alias
+figma-ds-cli doctor
+fig-start --safe
+```
+
+Then open any design file in Figma, start the `Figma Codex CLI` plugin once, and run:
+
+```bash
+node src/index.js smoke
+```
+
+That gives new users a simple first-run path:
+1. `doctor` tells them what is missing
+2. `fig-start --safe` avoids patching friction
+3. `smoke` proves the file is connected and render-ready
+
+If `doctor` says direct mode is ready later, you can switch to:
+
+```bash
+fig-start
+```
+
+---
+
+## What To Use First
+
+| Goal | Command |
+|---|---|
+| First working setup | `fig-start --safe` |
+| Quick health check | `figma-ds-cli doctor` |
+| End-to-end connection test | `node src/index.js smoke` |
+| Direct mode on a personal Mac | `fig-start` |
+| Generate shadcn components after setup | `node src/index.js shadcn add --all` |
+
+---
+
 ## shadcn/ui Component Package
 
-Build a complete shadcn/ui component pack directly inside Figma. The package includes 30 components and 58 ready-to-use variants aligned with the official system.
+Once your connection works, you can build a complete shadcn/ui component pack directly inside Figma. The package includes 30 components and 58 ready-to-use variants aligned with the official system.
 
 ### Quick Start
 
@@ -161,33 +205,9 @@ This repo ships with an `AGENTS.md` file that gives Codex project-specific opera
 
 ---
 
-## Quickstart
-
-If you just cloned the repo and want the fastest path to a working setup:
-
-```bash
-git clone https://github.com/cstueberitz/figma-codex-cli.git
-cd figma-codex-cli
-npm install
-npm run setup-alias
-figma-ds-cli doctor
-fig-start --safe
-```
-
-Then open any design file in Figma, start the `Figma Codex CLI` plugin once, and run:
-
-```bash
-node src/index.js smoke
-```
-
-That gives new users a simple first-run path:
-1. `doctor` tells them what is missing
-2. `fig-start --safe` avoids patching friction
-3. `smoke` proves the file is connected and render-ready
-
----
-
 ## Setup
+
+If the Quickstart above already worked for you, you can skip this section. The steps below are the fuller manual setup path.
 
 ```bash
 git clone https://github.com/cstueberitz/figma-codex-cli.git
@@ -271,6 +291,7 @@ Once the connection is up, try prompts like:
 The included `AGENTS.md` teaches Codex all commands automatically. No manual required.
 
 **Safe Mode users:** Start the Figma Codex CLI plugin each time you open Figma.
+
 **First-time token bootstrap:** When a command uses `var:` bindings and the needed local variables do not exist yet, the CLI asks before creating the matching color and spacing presets. Nothing is auto-created for new users unless they opt in.
 
 ---
@@ -299,7 +320,7 @@ Icons support:
 
 ## Two Connection Modes
 
-### 🚀 Yolo Mode (Recommended)
+### 🚀 Yolo Mode (Recommended When Available)
 
 **What it does:** Patches Figma once to enable a debug port, then connects directly.
 
@@ -367,7 +388,7 @@ Or manually: `node src/index.js connect --safe`
 
 | Situation | Command |
 |---|---|
-| First time user | `fig-start` (Yolo Mode) |
+| First time user | `fig-start --safe` |
 | Personal Mac | `fig-start` (Yolo Mode) |
 | Corporate laptop | `fig-start --safe` |
 | Permission errors with Yolo | `fig-start --safe` |
@@ -445,18 +466,12 @@ Windows is supported but less tested than macOS.
 
 ### First-Run Checklist
 
-If someone downloads the repo and wants the least confusing setup path:
+If someone downloads the repo and wants the least confusing path, use the Quickstart above:
 
 ```bash
 figma-ds-cli doctor
 fig-start --safe
 node src/index.js smoke
-```
-
-If `doctor` says Yolo Mode is ready, they can switch to:
-
-```bash
-fig-start
 ```
 
 ---
