@@ -1,16 +1,16 @@
 # figma-ds-cli
 
 <p align="center">
-  <a href="https://intodesignsystems.com"><img src="https://img.shields.io/badge/Into_Design_Systems-intodesignsystems.com-ff6b35" alt="Into Design Systems"></a>
+  <a href="https://github.com/cstueberitz/figma-codex-cli"><img src="https://img.shields.io/badge/GitHub-cstueberitz%2Ffigma--codex--cli-24292e" alt="GitHub Repo"></a>
   <img src="https://img.shields.io/badge/Figma-Desktop-purple" alt="Figma Desktop">
   <img src="https://img.shields.io/badge/No_API_Key-Required-green" alt="No API Key">
-  <img src="https://img.shields.io/badge/Claude_Code-Ready-blue" alt="Claude Code">
+  <img src="https://img.shields.io/badge/Codex-Ready-blue" alt="Codex">
 </p>
 
 <p align="center">
-  <b>Control Figma Desktop with Claude Code.</b><br>
+  <b>Control Figma Desktop with Codex.</b><br>
   Full read/write access. No API key required.<br>
-  Just talk to Claude about your designs.
+  Just talk to Codex about your designs.
 </p>
 
 ```
@@ -35,7 +35,7 @@ A CLI that connects directly to Figma Desktop and gives you complete control:
 - **Lint & Accessibility** — Contrast checker, touch targets, design rules
 - **Export** — PNG, SVG, JSX, Storybook stories, CSS variables, Tailwind config
 - **Batch Operations** — Rename layers, find/replace text, create 100 variables at once
-- **Works with Claude Code** — Just ask in natural language, Claude knows all commands
+- **Works with Codex** — Just ask in natural language, Codex knows all commands
 
 ---
 
@@ -128,15 +128,15 @@ All components use `var:` syntax to bind directly to shadcn variables. When you 
 
 ## Why This CLI?
 
-This project includes a `CLAUDE.md` file that Claude reads automatically. It contains:
+This project includes an `AGENTS.md` file that Codex reads automatically. It contains:
 
 - All available commands and their syntax
 - Best practices (e.g., "use `render` for text-heavy designs")
 - Common requests mapped to solutions
 
-**Want to teach Claude new tricks?** Just update `CLAUDE.md`. No code changes needed.
+**Want to teach Codex new tricks?** Just update `AGENTS.md`. No code changes needed.
 
-**Example:** You type "Create Tailwind colors" -> Claude already knows to run `node src/index.js tokens tailwind` because it's documented in `CLAUDE.md`.
+**Example:** You type "Create Tailwind colors" -> Codex already knows to run `node src/index.js tokens tailwind` because it's documented in `AGENTS.md`.
 
 ---
 
@@ -144,7 +144,7 @@ This project includes a `CLAUDE.md` file that Claude reads automatically. It con
 
 - **Node.js 18+** — `brew install node` (or [download](https://nodejs.org/))
 - **Figma Desktop** (free account works)
-- **Claude Code** ([get it here](https://www.anthropic.com/claude-code))
+- **Codex CLI** ([get it here](https://openai.com/index/gpt-5-2-codex/))
 - **macOS or Windows** (macOS recommended, Windows supported)
 - **macOS Full Disk Access** for Terminal (Yolo Mode only -- not needed for [Safe Mode](#-safe-mode--for-restricted-environments))
 
@@ -153,8 +153,8 @@ This project includes a `CLAUDE.md` file that Claude reads automatically. It con
 ## Setup
 
 ```bash
-git clone https://github.com/silships/figma-cli.git
-cd figma-cli
+git clone https://github.com/cstueberitz/figma-codex-cli.git
+cd figma-codex-cli
 npm install
 npm run setup-alias
 source ~/.zshrc
@@ -170,11 +170,11 @@ This will:
 1. Start Figma (if not running)
 2. Connect to Figma (Yolo Mode: patches Figma once for direct access)
 3. Show your open Figma files: pick one with arrow keys
-4. Launch Claude Code with all commands pre-loaded
+4. Launch Codex with all commands pre-loaded
 
-**Done.** Talk to Claude about your Figma file.
+**Done.** Talk to Codex about your Figma file.
 
-> **Note:** `fig-start` works from any directory. The setup script saves the repo location to `~/.figma-cli/config.json`.
+> **Note:** `fig-start` works from any directory. The setup script saves the repo location to `~/.figma-codex-cli/config.json` and auto-migrates the older `~/.figma-cli/config.json` if present.
 
 ### fig-start Options
 
@@ -182,7 +182,8 @@ This will:
 |---------|-------------|
 | `fig-start` | Yolo Mode (default), interactive file picker |
 | `fig-start --safe` | Safe Mode (plugin-based, no patching) |
-| `fig-start --setup` | Change the figma-cli repo path |
+| `fig-start --here` | Start Codex in the current directory and attach the figma-codex-cli repo as additional context |
+| `fig-start --setup` | Change the figma-codex-cli repo path |
 
 ### Safe Mode (no patching)
 
@@ -194,20 +195,24 @@ fig-start --safe
 
 This uses a Figma plugin instead of patching. See [Safe Mode](#-safe-mode--for-restricted-environments) for details.
 
+The repository folder is `figma-codex-cli`, while the CLI executable remains `figma-ds-cli` and the launcher remains `fig-start`.
+
+---
+
 ### Manual Setup (without fig-start)
 
 ```bash
-cd figma-cli
-claude
+cd figma-codex-cli
+codex
 ```
 
-Then tell Claude: `Connect to Figma`
+Then tell Codex: `Connect to Figma`
 
 ---
 
 ## Using It
 
-Once connected, just talk to Claude:
+Once connected, just talk to Codex:
 
 > "Add shadcn colors to my project"
 
@@ -219,7 +224,7 @@ Once connected, just talk to Claude:
 
 > "Export variables as CSS"
 
-The included `CLAUDE.md` teaches Claude all commands automatically. No manual required.
+The included `AGENTS.md` teaches Codex all commands automatically. No manual required.
 
 **Safe Mode users:** Start the FigCli plugin each time you open Figma.
 
@@ -398,7 +403,7 @@ Windows is supported but less tested than macOS.
 ## Updating
 
 ```bash
-cd ~/path/to/figma-cli
+cd ~/path/to/figma-codex-cli
 git pull
 npm install
 ```
@@ -613,7 +618,7 @@ Token is stored at `~/.figma-ds-cli/.daemon-token` with owner-only permissions (
 
 ## Author
 
-**[Sil Bormueller](https://www.linkedin.com/in/silbormueller/)** -- [intodesignsystems.com](https://intodesignsystems.com)
+Maintained by **[cstueberitz](https://github.com/cstueberitz)**.
 
 ## Powered By
 

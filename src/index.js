@@ -812,13 +812,13 @@ program.action(async () => {
 });
 
 function showQuickStart() {
-  console.log(chalk.white('  Just ask Claude:\n'));
+  console.log(chalk.white('  Just ask Codex:\n'));
   console.log(chalk.white('    "Add shadcn colors to my project"'));
   console.log(chalk.white('    "Create a blue card with rounded corners"'));
   console.log(chalk.white('    "Show me what\'s on the canvas"'));
   console.log(chalk.white('    "Export this frame as PNG"'));
   console.log();
-  console.log(chalk.gray('  Learn more: ') + chalk.cyan('https://intodesignsystems.com\n'));
+  console.log(chalk.gray('  Learn more: ') + chalk.cyan('https://github.com/cstueberitz/figma-codex-cli\n'));
 }
 
 // ============ WELCOME BANNER ============
@@ -833,7 +833,7 @@ function showBanner() {
   ╚═╝     ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═╝      ╚═════╝ ╚══════╝       ╚═════╝╚══════╝╚═╝
 `));
   console.log(chalk.white(`  Design System CLI for Figma ${chalk.gray('v' + pkg.version)}`));
-  console.log(chalk.gray(`  by Sil Bormüller • intodesignsystems.com\n`));
+  console.log(chalk.gray(`  maintained by cstueberitz • github.com/cstueberitz/figma-codex-cli\n`));
 }
 
 // ============ INIT (Interactive Onboarding) ============
@@ -925,13 +925,13 @@ program
     // Done!
     console.log(chalk.green('\n  ✓ Setup complete!\n'));
 
-    console.log(chalk.white('  Just ask Claude:\n'));
+    console.log(chalk.white('  Just ask Codex:\n'));
     console.log(chalk.white('    "Add shadcn colors to my project"'));
     console.log(chalk.white('    "Create a blue card with rounded corners"'));
     console.log(chalk.white('    "Show me what\'s on the canvas"'));
     console.log(chalk.white('    "Export this frame as PNG"'));
     console.log();
-    console.log(chalk.gray('  Learn more: ') + chalk.cyan('https://intodesignsystems.com\n'));
+    console.log(chalk.gray('  Learn more: ') + chalk.cyan('https://github.com/cstueberitz/figma-codex-cli\n'));
   });
 
 // ============ SETUP (alias for init) ============
@@ -1006,7 +1006,7 @@ program
   .action(async (options) => {
     // Fun welcome message
     console.log(chalk.hex('#FF6B35')('\n  ✨ Hey designer! ') + chalk.white("Don't be afraid of the terminal!"));
-    console.log(chalk.hex('#4ECDC4')('  🎨 Happy vibe coding! ') + chalk.gray('— Sil · ') + chalk.hex('#FF6B35')('intodesignsystems.com\n'));
+    console.log(chalk.hex('#4ECDC4')('  Happy vibe coding! ') + chalk.gray('— cstueberitz · ') + chalk.hex('#4ECDC4')('github.com/cstueberitz/figma-codex-cli\n'));
 
     const config = loadConfig();
 
@@ -2534,12 +2534,12 @@ return 'Imported ' + count + ' tokens into ' + collectionName;
 
 tokens
   .command('ds')
-  .description('Create IDS Base Design System (complete starter kit)')
+  .description('Create base design system starter kit')
   .action(async () => {
     checkConnection();
 
-    console.log(chalk.cyan('\n  IDS Base Design System'));
-    console.log(chalk.gray('  by Into Design Systems\n'));
+    console.log(chalk.cyan('\n  Base Design System'));
+    console.log(chalk.gray('  maintained by cstueberitz\n'));
 
     // IDS Base values
     const idsColors = {
@@ -2734,12 +2734,12 @@ return count;
 
 tokens
   .command('components')
-  .description('Create IDS Base Components (Button, Input, Card, Badge)')
+  .description('Create base components (Button, Input, Card, Badge)')
   .action(async () => {
     checkConnection();
 
-    console.log(chalk.cyan('\n  IDS Base Components'));
-    console.log(chalk.gray('  by Into Design Systems\n'));
+    console.log(chalk.cyan('\n  Base Components'));
+    console.log(chalk.gray('  maintained by cstueberitz\n'));
 
     // Component colors (using IDS Base values)
     const colors = {

@@ -25,14 +25,14 @@ fi
 
 # Add alias
 echo "" >> "$RC_FILE"
-echo "# Figma CLI" >> "$RC_FILE"
+echo "# Figma Codex CLI" >> "$RC_FILE"
 echo "$ALIAS_LINE" >> "$RC_FILE"
 
 # Save repo path to config
-mkdir -p "$HOME/.figma-cli"
+mkdir -p "$HOME/.figma-codex-cli"
 python3 -c "
 import json, os
-path = os.path.expanduser('~/.figma-cli/config.json')
+path = os.path.expanduser('~/.figma-codex-cli/config.json')
 cfg = {}
 if os.path.exists(path):
     with open(path) as f: cfg = json.load(f)
