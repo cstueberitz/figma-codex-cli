@@ -620,6 +620,12 @@ Token is stored at `~/.figma-ds-cli/.daemon-token` with owner-only permissions (
 
 Maintained by **[cstueberitz](https://github.com/cstueberitz)**.
 
+## Origin
+
+This Codex-focused variant started from **[silships/figma-cli](https://github.com/silships/figma-cli)**.
+
+Shoutout to **[silships](https://github.com/silships)** for the original project, the initial workflow, and the foundation this repo builds on.
+
 ## Powered By
 
 This CLI is built on top of **[figma-use](https://github.com/dannote/figma-use)** by [dannote](https://github.com/dannote) -- an excellent Figma CLI with JSX rendering, XPath queries, design linting, and much more.
