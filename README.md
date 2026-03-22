@@ -124,6 +124,17 @@ All components use `var:` syntax to bind directly to shadcn variables. When you 
 - `destructive`, `destructive-foreground` — error states
 - `border`, `input`, `ring` — borders, inputs, focus rings
 
+Additional presets:
+
+- `node src/index.js tokens preset dark` — single dark semantic palette for quick dark UI work
+- `node src/index.js tokens spacing --preset power` — power-style spacing ladder with `Compact` and `Comfortable` modes when the file allows multiple modes
+- `node src/index.js tokens mode theme dark` — switch the active shadcn theme to dark
+- `node src/index.js tokens mode spacing comfortable` — switch the active spacing values to comfortable
+
+Starter-plan note:
+
+- If the file only allows one variable mode, the CLI creates starter-safe fallback collections and uses `tokens mode ...` to swap the active values in place.
+
 ---
 
 ## Why This CLI?
@@ -147,6 +158,32 @@ This repo ships with an `AGENTS.md` file that gives Codex project-specific opera
 - **Codex CLI** ([get it here](https://openai.com/index/gpt-5-2-codex/))
 - **macOS or Windows** (macOS recommended, Windows supported)
 - **macOS Full Disk Access** for Terminal (Yolo Mode only -- not needed for [Safe Mode](#-safe-mode--for-restricted-environments))
+
+---
+
+## Quickstart
+
+If you just cloned the repo and want the fastest path to a working setup:
+
+```bash
+git clone https://github.com/cstueberitz/figma-codex-cli.git
+cd figma-codex-cli
+npm install
+npm run setup-alias
+figma-ds-cli doctor
+fig-start --safe
+```
+
+Then open any design file in Figma, start the `Figma Codex CLI` plugin once, and run:
+
+```bash
+node src/index.js smoke
+```
+
+That gives new users a simple first-run path:
+1. `doctor` tells them what is missing
+2. `fig-start --safe` avoids patching friction
+3. `smoke` proves the file is connected and render-ready
 
 ---
 
@@ -184,6 +221,13 @@ After that, you can work from prompts instead of remembering commands.
 | `fig-start --safe` | Safe Mode (plugin-based, no patching) |
 | `fig-start --here` | Start Codex in the current directory and attach the figma-codex-cli repo as additional context |
 | `fig-start --setup` | Change the figma-codex-cli repo path |
+
+### First-Run Helpers
+
+| Command | What it does |
+|---------|---------------|
+| `figma-ds-cli doctor` | Checks Node, Codex, Figma, daemon state, and connection readiness |
+| `node src/index.js smoke` | Runs a small end-to-end render test in the current Figma file |
 
 ### Safe Mode (no patching)
 
@@ -227,6 +271,7 @@ Once the connection is up, try prompts like:
 The included `AGENTS.md` teaches Codex all commands automatically. No manual required.
 
 **Safe Mode users:** Start the Figma Codex CLI plugin each time you open Figma.
+**First-time token bootstrap:** When a command uses `var:` bindings and the needed local variables do not exist yet, the CLI asks before creating the matching color and spacing presets. Nothing is auto-created for new users unless they opt in.
 
 ---
 
@@ -398,6 +443,22 @@ Windows is supported but less tested than macOS.
 2. Open a design file in Figma (not just the home screen)
 3. Restart connection: `node src/index.js connect`
 
+### First-Run Checklist
+
+If someone downloads the repo and wants the least confusing setup path:
+
+```bash
+figma-ds-cli doctor
+fig-start --safe
+node src/index.js smoke
+```
+
+If `doctor` says Yolo Mode is ready, they can switch to:
+
+```bash
+fig-start
+```
+
 ---
 
 ## Updating
@@ -445,6 +506,7 @@ Token is stored at `~/.figma-ds-cli/.daemon-token` with owner-only permissions (
 ### Design Tokens & Variables
 
 - **Color presets** -- shadcn (276 vars with Light/Dark mode), Radix UI (156 vars)
+- **Radius presets** -- primitive radius scale plus semantic aliases for cards, buttons, inputs, images, and badges
 - Create Tailwind CSS color palettes (all 22 color families, 50-950 shades)
 - Create and manage variable collections
 - **Variable modes** (Light/Dark/Mobile) with per-mode values
@@ -453,6 +515,9 @@ Token is stored at `~/.figma-ds-cli/.daemon-token` with owner-only permissions (
 - Bind variables to node properties (fill, stroke, gap, padding, radius)
 - Export variables as CSS custom properties
 - Export variables as Tailwind config
+
+When `var:` bindings reference missing local variables, the CLI prompts once before bootstrapping `tokens preset shadcn` and/or `tokens spacing --preset power`. Choosing `always` stores that preference locally; choosing `no` keeps bootstrap fully manual.
+The same bootstrap prompt also covers `tokens radii` when a render references missing `var:radius/...` tokens.
 
 ### Create Elements
 

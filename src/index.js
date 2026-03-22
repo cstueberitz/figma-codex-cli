@@ -188,7 +188,8 @@ async function fastEval(code) {
     try {
       return await daemonExec('eval', { code });
     } catch (e) {
-      // Continue to fallback
+      // In Safe Mode, prefer the sync daemon path over a direct CDP fallback.
+      return figmaEvalSync(code);
     }
   }
 
@@ -324,6 +325,51 @@ function loadConfig() {
 function saveConfig(config) {
   if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
   writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+function commandExists(cmd) {
+  try {
+    execSync(process.platform === 'win32' ? `where ${cmd}` : `which ${cmd}`, { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getConnectionHealth() {
+  const health = {
+    daemon: false,
+    plugin: false,
+    cdp: false,
+    cdpPort: false,
+    figmaRunning: false,
+    directConnection: false
+  };
+
+  try {
+    health.figmaRunning = isFigmaRunning();
+  } catch {}
+
+  try {
+    const response = await fetch('http://127.0.0.1:9222/json/version', { signal: AbortSignal.timeout(2000) });
+    health.cdpPort = response.ok;
+  } catch {}
+
+  try {
+    const token = getDaemonToken();
+    const header = token ? ` -H "X-Daemon-Token: ${token}"` : '';
+    const response = execSync(`curl -s${header} http://127.0.0.1:${DAEMON_PORT}/health`, { encoding: 'utf8', timeout: 2000 });
+    const data = JSON.parse(response);
+    health.daemon = data.status === 'ok';
+    health.plugin = !!data.plugin;
+    health.cdp = !!data.cdp;
+  } catch {}
+
+  try {
+    health.directConnection = await FigmaClient.isConnected();
+  } catch {}
+
+  return health;
 }
 
 // Singleton FigmaClient instance
@@ -611,6 +657,94 @@ function isVarRef(value) {
 // Helper: Extract variable name from var:name syntax
 function getVarName(value) {
   return value.slice(4);
+}
+
+function extractVarRefs(text) {
+  if (!text || typeof text !== 'string') return [];
+  const matches = text.match(/var:[A-Za-z0-9/_-]+/g) || [];
+  return matches.map(match => getVarName(match));
+}
+
+function collectVarRefsFromValues(values) {
+  return values
+    .filter(value => typeof value === 'string' && isVarRef(value))
+    .map(getVarName);
+}
+
+async function getExistingVariableNames() {
+  const result = await daemonExec('eval', {
+    code: `(async () => {
+      const vars = await figma.variables.getLocalVariablesAsync();
+      return vars.map(v => v.name);
+    })()`
+  });
+  return Array.isArray(result) ? result : [];
+}
+
+function runBootstrapCommand(args) {
+  const cmd = `"${process.execPath}" "${CLI_FILE}" ${args}`;
+  execSync(cmd, { stdio: 'inherit', cwd: REPO_ROOT });
+}
+
+async function ensureVarRefsReady(varRefs, sourceLabel = 'this command') {
+  const requested = [...new Set(varRefs.filter(Boolean))];
+  if (requested.length === 0) return;
+
+  let existing = await getExistingVariableNames();
+  let missing = requested.filter(name => !existing.includes(name));
+  if (missing.length === 0) return;
+
+  const needsSpacingPreset = missing.some(name => name.startsWith('space/'));
+  const needsRadiusPreset = missing.some(name => name.startsWith('radius/'));
+  const needsColorPreset = missing.some(name => !name.startsWith('space/') && !name.startsWith('radius/'));
+
+  const config = loadConfig();
+  let bootstrapPref = config.autoBootstrapVarTokens;
+
+  if (!bootstrapPref) {
+    const answer = (await prompt(
+      `Missing local variables for ${sourceLabel}: ${missing.join(', ')}\n` +
+      `Create the required presets now? [y]es / [a]lways / [n]o: `
+    )).trim().toLowerCase();
+
+    if (answer === 'a' || answer === 'always') {
+      bootstrapPref = 'always';
+      config.autoBootstrapVarTokens = 'always';
+      saveConfig(config);
+    } else if (answer === 'n' || answer === 'no') {
+      bootstrapPref = 'never';
+      config.autoBootstrapVarTokens = 'never';
+      saveConfig(config);
+    } else {
+      bootstrapPref = 'once';
+    }
+  }
+
+  if (bootstrapPref === 'never') {
+    throw new Error(
+      `Missing variables: ${missing.join(', ')}\n` +
+      `Run the needed presets manually:\n` +
+      `${needsColorPreset ? '  node src/index.js tokens preset shadcn\n' : ''}` +
+      `${needsSpacingPreset ? '  node src/index.js tokens spacing --preset power\n' : ''}` +
+      `${needsRadiusPreset ? '  node src/index.js tokens radii\n' : ''}`.trimEnd()
+    );
+  }
+
+  if (needsColorPreset) {
+    runBootstrapCommand('tokens preset shadcn');
+  }
+  if (needsSpacingPreset) {
+    runBootstrapCommand('tokens spacing --preset power');
+  }
+  if (needsRadiusPreset) {
+    runBootstrapCommand('tokens radii');
+  }
+
+  existing = await getExistingVariableNames();
+  missing = requested.filter(name => !existing.includes(name));
+  if (missing.length > 0) {
+    throw new Error(`Some variables are still missing after bootstrap: ${missing.join(', ')}`);
+  }
 }
 
 // Helper: Generate fill code (hex or variable binding)
@@ -2058,7 +2192,7 @@ return 'Created ' + count + ' color variables in ${options.collection}';
 
 tokens
   .command('preset <name>')
-  .description('Add color presets: shadcn, radix')
+  .description('Add color presets: shadcn, dark, radix')
   .action(async (preset) => {
     checkConnection();
 
@@ -2170,16 +2304,34 @@ for (const [colorName, shades] of Object.entries(primitives)) {
 let semCol = cols.find(c => c.name === 'shadcn/semantic');
 if (!semCol) semCol = figma.variables.createVariableCollection('shadcn/semantic');
 
-// Ensure we have Light and Dark modes
+function ensureSingleModeCollection(name, modeName) {
+  let col = cols.find(c => c.name === name);
+  if (!col) col = figma.variables.createVariableCollection(name);
+  if (col.modes[0] && col.modes[0].name !== modeName) {
+    col.renameMode(col.modes[0].modeId, modeName);
+  }
+  return col;
+}
+
+// Ensure we have Light and Dark modes where the file supports them
 let lightModeId = semCol.modes.find(m => m.name === 'Light')?.modeId;
 let darkModeId = semCol.modes.find(m => m.name === 'Dark')?.modeId;
+let hasDarkMode = !!darkModeId;
+let fallbackCollections = false;
 
 if (!lightModeId) {
-  semCol.renameMode(semCol.modes[0].modeId, 'Light');
+  semCol.renameMode(semCol.modes[0].modeId, 'Active');
   lightModeId = semCol.modes[0].modeId;
 }
 if (!darkModeId) {
-  darkModeId = semCol.addMode('Dark');
+  try {
+    darkModeId = semCol.addMode('Dark');
+    hasDarkMode = true;
+    semCol.renameMode(lightModeId, 'Light');
+  } catch (error) {
+    darkModeId = lightModeId;
+    fallbackCollections = true;
+  }
 }
 
 // Create semantic variables with aliases
@@ -2199,23 +2351,142 @@ for (const [name, refs] of Object.entries(semanticTokens)) {
 
   // Set Dark mode (alias to primitive)
   const darkPrim = primVarMap[refs.dark];
-  if (darkPrim) {
+  if (hasDarkMode && darkPrim) {
     v.setValueForMode(darkModeId, { type: 'VARIABLE_ALIAS', id: darkPrim.id });
   }
 }
 
-return 'Created ' + primCount + ' primitives + ' + semCount + ' semantic tokens (Light/Dark)';
+if (fallbackCollections) {
+  const lightCol = ensureSingleModeCollection('shadcn/semantic/light', 'Light');
+  const darkCol = ensureSingleModeCollection('shadcn/semantic/dark', 'Dark');
+  const existingColorVars = await figma.variables.getLocalVariablesAsync('COLOR');
+
+  for (const [name, refs] of Object.entries(semanticTokens)) {
+    const lightPrim = primVarMap[refs.light];
+    const darkPrim = primVarMap[refs.dark];
+
+    let lightVar = existingColorVars.find(ev => ev.name === name && ev.variableCollectionId === lightCol.id);
+    if (!lightVar) {
+      lightVar = figma.variables.createVariable(name, lightCol, 'COLOR');
+    }
+    if (lightPrim) {
+      lightVar.setValueForMode(lightCol.modes[0].modeId, { type: 'VARIABLE_ALIAS', id: lightPrim.id });
+    }
+
+    let darkVar = existingColorVars.find(ev => ev.name === name && ev.variableCollectionId === darkCol.id);
+    if (!darkVar) {
+      darkVar = figma.variables.createVariable(name, darkCol, 'COLOR');
+    }
+    if (darkPrim) {
+      darkVar.setValueForMode(darkCol.modes[0].modeId, { type: 'VARIABLE_ALIAS', id: darkPrim.id });
+    }
+  }
+}
+
+return JSON.stringify({
+  primCount,
+  semCount,
+  hasDarkMode,
+  fallbackCollections
+});
 })()`;
 
       try {
         const result = await fastEval(code);
-        spinner.succeed(result || 'Added shadcn colors');
+        let details = { primCount: 244, semCount: 32, hasDarkMode: true };
+        if (result) {
+          if (typeof result === 'string' && result.trim().startsWith('{')) {
+            details = { ...details, ...JSON.parse(result) };
+          } else if (typeof result === 'object') {
+            details = { ...details, ...result };
+          }
+        }
+        spinner.succeed(`Created ${details.primCount} primitives + ${details.semCount} semantic tokens${details.hasDarkMode ? ' (Light/Dark)' : details.fallbackCollections ? ' (Starter fallback ready)' : ' (Light only)'}`);
         console.log(chalk.gray('\n  Collections created:'));
         console.log(chalk.gray('    • shadcn/primitives - 244 color primitives'));
-        console.log(chalk.gray('    • shadcn/semantic   - 32 semantic tokens (Light/Dark mode)\n'));
-        console.log(chalk.gray('  Usage: Apply "Light" or "Dark" mode to any frame'));
+        console.log(chalk.gray(`    • shadcn/semantic   - 32 semantic tokens ${details.hasDarkMode ? '(Light/Dark mode)' : details.fallbackCollections ? '(Active mode + fallback collections)' : '(Light mode only)'}`));
+        if (details.fallbackCollections) {
+          console.log(chalk.gray('    • shadcn/semantic/light - 32 light fallback tokens'));
+          console.log(chalk.gray('    • shadcn/semantic/dark  - 32 dark fallback tokens\n'));
+        } else {
+          console.log('');
+        }
+        if (details.hasDarkMode) {
+          console.log(chalk.gray('  Usage: Apply "Light" or "Dark" mode to any frame'));
+        } else if (details.fallbackCollections) {
+          console.log(chalk.gray('  Starter fallback: use ') + chalk.cyan('node src/index.js tokens mode theme dark') + chalk.gray(' to swap active theme values.'));
+        } else {
+          console.log(chalk.gray('  Note: This file currently allows only one mode, so semantic tokens were created in Light mode only.'));
+        }
       } catch (error) {
         spinner.fail('Failed to add shadcn');
+        console.error(chalk.red(error.message));
+      }
+
+    } else if (presetLower === 'dark') {
+      const spinner = ora('Adding dark semantic palette...').start();
+
+      const darkPalette = {
+        'background': '#09090b',
+        'foreground': '#fafafa',
+        'card': '#09090b',
+        'card-foreground': '#fafafa',
+        'popover': '#09090b',
+        'popover-foreground': '#fafafa',
+        'primary': '#fafafa',
+        'primary-foreground': '#18181b',
+        'secondary': '#27272a',
+        'secondary-foreground': '#fafafa',
+        'muted': '#27272a',
+        'muted-foreground': '#a1a1aa',
+        'accent': '#27272a',
+        'accent-foreground': '#fafafa',
+        'destructive': '#7f1d1d',
+        'destructive-foreground': '#fafafa',
+        'border': '#27272a',
+        'input': '#27272a',
+        'ring': '#d4d4d8',
+        'surface-1': '#111113',
+        'surface-2': '#18181b',
+        'surface-3': '#27272a',
+        'overlay': '#09090be6'
+      };
+
+      const code = `(async () => {
+const colors = ${JSON.stringify(darkPalette)};
+function hexToRgb(hex) {
+  const normalized = hex.slice(0, 7);
+  const r = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(normalized);
+  return r ? { r: parseInt(r[1], 16) / 255, g: parseInt(r[2], 16) / 255, b: parseInt(r[3], 16) / 255 } : null;
+}
+const cols = await figma.variables.getLocalVariableCollectionsAsync();
+let col = cols.find(c => c.name === 'dark/semantic');
+if (!col) col = figma.variables.createVariableCollection('dark/semantic');
+const modeId = col.modes[0].modeId;
+const existingVars = await figma.variables.getLocalVariablesAsync('COLOR');
+let created = 0;
+
+for (const [name, hex] of Object.entries(colors)) {
+  let v = existingVars.find(ev => ev.name === name && ev.variableCollectionId === col.id);
+  if (!v) {
+    v = figma.variables.createVariable(name, col, 'COLOR');
+    created++;
+  }
+  const rgb = hexToRgb(hex);
+  if (rgb) v.setValueForMode(modeId, rgb);
+}
+
+return 'Created ' + created + ' dark semantic colors';
+})()`;
+
+      try {
+        const result = figmaUse(`eval "${code.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, { silent: true });
+        spinner.succeed(result?.trim() || 'Added dark semantic palette');
+        console.log(chalk.gray('\n  Collection created:'));
+        console.log(chalk.gray('    • dark/semantic - 23 dark-ready semantic colors\n'));
+        console.log(chalk.gray('  Includes background, card, primary, muted, border, ring and surface layers.'));
+      } catch (error) {
+        spinner.fail('Failed to add dark palette');
         console.error(chalk.red(error.message));
       }
 
@@ -2284,11 +2555,11 @@ return 'Created ' + count + ' Radix color variables';
 
     } else if (presetLower === 'material') {
       console.log(chalk.yellow('Material Design preset coming soon!'));
-      console.log(chalk.gray('Available now: shadcn, radix'));
+      console.log(chalk.gray('Available now: shadcn, dark, radix'));
 
     } else {
       console.log(chalk.red(`Unknown preset: ${preset}`));
-      console.log(chalk.gray('Available presets: shadcn, radix, material (coming soon)'));
+      console.log(chalk.gray('Available presets: shadcn, dark, radix, material (coming soon)'));
     }
   });
 
@@ -2362,11 +2633,186 @@ return 'Created ' + count + ' shadcn color variables in ${options.collection}';
 
 tokens
   .command('spacing')
-  .description('Create spacing scale (4px base)')
+  .description('Create spacing scale or spacing preset')
   .option('-c, --collection <name>', 'Collection name', 'Spacing')
+  .option('-p, --preset <name>', 'Preset name: base, power', 'base')
   .action((options) => {
     checkConnection();
-    const spinner = ora('Creating spacing scale...').start();
+    const presetLower = options.preset.toLowerCase();
+    const spinner = ora(presetLower === 'power' ? 'Creating power spacing preset...' : 'Creating spacing scale...').start();
+
+    if (presetLower === 'power') {
+      const primitiveSpacing = {
+        '2': 2,
+        '4': 4,
+        '8': 8,
+        '12': 12,
+        '16': 16,
+        '20': 20,
+        '24': 24,
+        '32': 32,
+        '48': 48,
+        '64': 64,
+        '96': 96,
+        '128': 128,
+        '160': 160
+      };
+
+      const compactSpacing = {
+        'space/2xs': '2',
+        'space/xs': '4',
+        'space/sm': '8',
+        'space/md': '16',
+        'space/lg': '24',
+        'space/xl': '32',
+        'space/2xl': '48',
+        'space/3xl': '64',
+        'space/4xl': '96',
+        'space/5xl': '128'
+      };
+
+      const comfortableSpacing = {
+        'space/2xs': '4',
+        'space/xs': '8',
+        'space/sm': '12',
+        'space/md': '20',
+        'space/lg': '32',
+        'space/xl': '48',
+        'space/2xl': '64',
+        'space/3xl': '96',
+        'space/4xl': '128',
+        'space/5xl': '160'
+      };
+
+      const code = `(async () => {
+const primitiveSpacing = ${JSON.stringify(primitiveSpacing)};
+const compactSpacing = ${JSON.stringify(compactSpacing)};
+const comfortableSpacing = ${JSON.stringify(comfortableSpacing)};
+const cols = await figma.variables.getLocalVariableCollectionsAsync();
+let primitiveCol = cols.find(c => c.name === 'Spacing/primitives');
+if (!primitiveCol) primitiveCol = figma.variables.createVariableCollection('Spacing/primitives');
+const primitiveModeId = primitiveCol.modes[0].modeId;
+
+let semanticCol = cols.find(c => c.name === '${options.collection}');
+if (!semanticCol) semanticCol = figma.variables.createVariableCollection('${options.collection}');
+
+let compactModeId = semanticCol.modes.find(m => m.name === 'Compact')?.modeId;
+let comfortableModeId = semanticCol.modes.find(m => m.name === 'Comfortable')?.modeId;
+let hasComfortableMode = !!comfortableModeId;
+let fallbackCollections = false;
+
+if (!compactModeId) {
+  semanticCol.renameMode(semanticCol.modes[0].modeId, 'Active');
+  compactModeId = semanticCol.modes[0].modeId;
+}
+if (!comfortableModeId) {
+  try {
+    comfortableModeId = semanticCol.addMode('Comfortable');
+    hasComfortableMode = true;
+    semanticCol.renameMode(compactModeId, 'Compact');
+  } catch (error) {
+    comfortableModeId = compactModeId;
+    fallbackCollections = true;
+  }
+}
+
+const existingVars = await figma.variables.getLocalVariablesAsync();
+const primitiveVars = {};
+let primitiveCreated = 0;
+for (const [name, value] of Object.entries(primitiveSpacing)) {
+  let v = existingVars.find(ev => ev.name === name && ev.variableCollectionId === primitiveCol.id);
+  if (!v) {
+    v = figma.variables.createVariable(name, primitiveCol, 'FLOAT');
+    primitiveCreated++;
+  }
+  v.setValueForMode(primitiveModeId, value);
+  primitiveVars[name] = v;
+}
+
+let created = 0;
+
+for (const [name, compactPrimitive] of Object.entries(compactSpacing)) {
+  let v = existingVars.find(ev => ev.name === name && ev.variableCollectionId === semanticCol.id);
+  if (!v) {
+    v = figma.variables.createVariable(name, semanticCol, 'FLOAT');
+    created++;
+  }
+  const compactVar = primitiveVars[compactPrimitive];
+  if (compactVar) {
+    v.setValueForMode(compactModeId, { type: 'VARIABLE_ALIAS', id: compactVar.id });
+  }
+  if (hasComfortableMode) {
+    const comfortableVar = primitiveVars[comfortableSpacing[name]];
+    if (comfortableVar) {
+      v.setValueForMode(comfortableModeId, { type: 'VARIABLE_ALIAS', id: comfortableVar.id });
+    }
+  }
+}
+
+if (fallbackCollections) {
+  let compactCol = cols.find(c => c.name === '${options.collection}/compact');
+  if (!compactCol) compactCol = figma.variables.createVariableCollection('${options.collection}/compact');
+  if (compactCol.modes[0] && compactCol.modes[0].name !== 'Compact') {
+    compactCol.renameMode(compactCol.modes[0].modeId, 'Compact');
+  }
+
+  let comfortableCol = cols.find(c => c.name === '${options.collection}/comfortable');
+  if (!comfortableCol) comfortableCol = figma.variables.createVariableCollection('${options.collection}/comfortable');
+  if (comfortableCol.modes[0] && comfortableCol.modes[0].name !== 'Comfortable') {
+    comfortableCol.renameMode(comfortableCol.modes[0].modeId, 'Comfortable');
+  }
+
+  const allVars = await figma.variables.getLocalVariablesAsync();
+  for (const [name, compactPrimitive] of Object.entries(compactSpacing)) {
+    let compactVar = allVars.find(ev => ev.name === name && ev.variableCollectionId === compactCol.id);
+    if (!compactVar) {
+      compactVar = figma.variables.createVariable(name, compactCol, 'FLOAT');
+    }
+    const compactPrimitiveVar = primitiveVars[compactPrimitive];
+    if (compactPrimitiveVar) {
+      compactVar.setValueForMode(compactCol.modes[0].modeId, { type: 'VARIABLE_ALIAS', id: compactPrimitiveVar.id });
+    }
+
+    let comfortableVar = allVars.find(ev => ev.name === name && ev.variableCollectionId === comfortableCol.id);
+    if (!comfortableVar) {
+      comfortableVar = figma.variables.createVariable(name, comfortableCol, 'FLOAT');
+    }
+    const comfortablePrimitiveVar = primitiveVars[comfortableSpacing[name]];
+    if (comfortablePrimitiveVar) {
+      comfortableVar.setValueForMode(comfortableCol.modes[0].modeId, { type: 'VARIABLE_ALIAS', id: comfortablePrimitiveVar.id });
+    }
+  }
+}
+
+return JSON.stringify({ created, primitiveCreated, total: Object.keys(compactSpacing).length, hasComfortableMode, fallbackCollections });
+})()`;
+
+      try {
+        const result = figmaUse(`eval "${code.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, { silent: true });
+        let details = { created: 0, primitiveCreated: 0, total: 10, hasComfortableMode: true, fallbackCollections: false };
+        if (result?.trim()?.startsWith('{')) {
+          details = { ...details, ...JSON.parse(result) };
+        }
+        spinner.succeed(`Created ${details.primitiveCreated} spacing primitives + ${details.created} spacing semantic tokens`);
+        console.log(chalk.gray('\n  Collection updated:'));
+        console.log(chalk.gray(`    • Spacing/primitives - ${Object.keys(primitiveSpacing).length} primitive spacing values`));
+        console.log(chalk.gray(`    • ${options.collection} - ${details.total} semantic spacing tokens ${details.hasComfortableMode ? '(Compact/Comfortable)' : details.fallbackCollections ? '(Active mode + fallback collections)' : '(Compact only)'}`));
+        if (details.fallbackCollections) {
+          console.log(chalk.gray(`    • ${options.collection}/compact - ${details.total} compact fallback tokens`));
+          console.log(chalk.gray(`    • ${options.collection}/comfortable - ${details.total} comfortable fallback tokens\n`));
+        } else {
+          console.log('');
+        }
+        console.log(chalk.gray('  Ladder: 2, 4, 8, 16, 24, 32, 48, 64, 96, 128'));
+        if (details.fallbackCollections) {
+          console.log(chalk.gray('  Starter fallback: use ') + chalk.cyan('node src/index.js tokens mode spacing comfortable') + chalk.gray(' to swap active spacing values.'));
+        }
+      } catch (error) {
+        spinner.fail('Failed to create power spacing preset');
+        console.error(chalk.red(error.message));
+      }
+      return;
+    }
 
     const spacings = {
       '0': 0, '0.5': 2, '1': 4, '1.5': 6, '2': 8, '2.5': 10,
@@ -2400,47 +2846,214 @@ return 'Created ' + count + ' spacing variables';
       spinner.succeed(result?.trim() || 'Created spacing scale');
     } catch (error) {
       spinner.fail('Failed to create spacing scale');
+      console.error(chalk.red(error.message));
     }
   });
 
 tokens
+  .command('mode <group> <name>')
+  .description('Switch theme or spacing mode. Groups: theme, spacing')
+  .action(async (group, name) => {
+    checkConnection();
+    const groupLower = group.toLowerCase();
+    const nameLower = name.toLowerCase();
+    const spinner = ora(`Applying ${groupLower} mode "${nameLower}"...`).start();
+
+    if (groupLower === 'theme') {
+      const code = `(async () => {
+const modeName = '${nameLower}' === 'dark' ? 'Dark' : 'Light';
+const cols = await figma.variables.getLocalVariableCollectionsAsync();
+const mainCol = cols.find(c => c.name === 'shadcn/semantic');
+if (!mainCol) throw new Error('Missing collection: shadcn/semantic');
+
+const targetMode = mainCol.modes.find(m => m.name.toLowerCase() === modeName.toLowerCase());
+if (targetMode) {
+  if (typeof figma.currentPage.setExplicitVariableModeForCollection === 'function') {
+    figma.currentPage.setExplicitVariableModeForCollection(mainCol.id, targetMode.modeId);
+  }
+  return 'Applied real variable mode ' + modeName;
+}
+
+const fallbackCol = cols.find(c => c.name === 'shadcn/semantic/' + modeName.toLowerCase());
+if (!fallbackCol) {
+  throw new Error('No fallback collection found for ' + modeName + '. Run tokens preset shadcn first.');
+}
+
+const colorVars = await figma.variables.getLocalVariablesAsync('COLOR');
+const mainVars = colorVars.filter(v => v.variableCollectionId === mainCol.id);
+const fallbackVars = colorVars.filter(v => v.variableCollectionId === fallbackCol.id);
+const mainModeId = mainCol.modes[0].modeId;
+const fallbackModeId = fallbackCol.modes[0].modeId;
+let updated = 0;
+
+for (const v of mainVars) {
+  const source = fallbackVars.find(fv => fv.name === v.name);
+  if (!source) continue;
+  const value = source.valuesByMode[fallbackModeId];
+  if (value) {
+    v.setValueForMode(mainModeId, value);
+    updated++;
+  }
+}
+
+return 'Applied starter fallback ' + modeName + ' theme to ' + updated + ' variables';
+})()`;
+
+      try {
+        const result = await fastEval(code);
+        spinner.succeed(result?.trim() || `Applied theme mode ${nameLower}`);
+      } catch (error) {
+        spinner.fail('Failed to apply theme mode');
+        console.error(chalk.red(error.message));
+      }
+      return;
+    }
+
+    if (groupLower === 'spacing') {
+      const modeName = nameLower === 'comfortable' ? 'Comfortable' : 'Compact';
+      const fallbackName = modeName.toLowerCase();
+      const code = `(async () => {
+const modeName = '${modeName}';
+const cols = await figma.variables.getLocalVariableCollectionsAsync();
+const mainCol = cols.find(c => c.name === 'Spacing');
+if (!mainCol) throw new Error('Missing collection: Spacing');
+
+const targetMode = mainCol.modes.find(m => m.name.toLowerCase() === modeName.toLowerCase());
+if (targetMode) {
+  if (typeof figma.currentPage.setExplicitVariableModeForCollection === 'function') {
+    figma.currentPage.setExplicitVariableModeForCollection(mainCol.id, targetMode.modeId);
+  }
+  return 'Applied real variable mode ' + modeName;
+}
+
+const fallbackCol = cols.find(c => c.name === 'Spacing/${fallbackName}');
+if (!fallbackCol) {
+  throw new Error('No fallback collection found for ' + modeName + '. Run tokens spacing --preset power first.');
+}
+
+const floatVars = await figma.variables.getLocalVariablesAsync('FLOAT');
+const mainVars = floatVars.filter(v => v.variableCollectionId === mainCol.id);
+const fallbackVars = floatVars.filter(v => v.variableCollectionId === fallbackCol.id);
+const mainModeId = mainCol.modes[0].modeId;
+const fallbackModeId = fallbackCol.modes[0].modeId;
+let updated = 0;
+
+for (const v of mainVars) {
+  const source = fallbackVars.find(fv => fv.name === v.name);
+  if (!source) continue;
+  const value = source.valuesByMode[fallbackModeId];
+  if (value !== undefined) {
+    v.setValueForMode(mainModeId, value);
+    updated++;
+  }
+}
+
+return 'Applied starter fallback ' + modeName + ' spacing to ' + updated + ' variables';
+})()`;
+
+      try {
+        const result = await fastEval(code);
+        spinner.succeed(result?.trim() || `Applied spacing mode ${nameLower}`);
+      } catch (error) {
+        spinner.fail('Failed to apply spacing mode');
+        console.error(chalk.red(error.message));
+      }
+      return;
+    }
+
+    spinner.fail('Unknown mode group');
+    console.log(chalk.gray('Use one of: theme, spacing'));
+  });
+
+tokens
   .command('radii')
-  .description('Create border radius scale')
-  .option('-c, --collection <name>', 'Collection name', 'Radii')
-  .action((options) => {
+  .description('Create border radius primitives + semantic aliases')
+  .action(async () => {
     checkConnection();
     const spinner = ora('Creating border radii...').start();
 
-    const radii = {
-      'none': 0, 'sm': 2, 'default': 4, 'md': 6, 'lg': 8,
-      'xl': 12, '2xl': 16, '3xl': 24, 'full': 9999
+    const primitiveRadii = {
+      'none': 0,
+      'xs': 4,
+      'sm': 6,
+      'md': 8,
+      'lg': 12,
+      'xl': 16,
+      '2xl': 24,
+      '3xl': 32,
+      'full': 9999
+    };
+    const semanticRadii = {
+      'radius/input': 'xs',
+      'radius/button': 'md',
+      'radius/card': 'xl',
+      'radius/image': 'lg',
+      'radius/dialog': '2xl',
+      'radius/surface': 'lg',
+      'radius/badge': 'full',
+      'radius/chip': 'full'
     };
 
     const code = `(async () => {
-const radii = ${JSON.stringify(radii)};
+const primitiveRadii = ${JSON.stringify(primitiveRadii)};
+const semanticRadii = ${JSON.stringify(semanticRadii)};
 const cols = await figma.variables.getLocalVariableCollectionsAsync();
-let col = cols.find(c => c.name === '${options.collection}');
-if (!col) col = figma.variables.createVariableCollection('${options.collection}');
-const modeId = col.modes[0].modeId;
-const existingVars = await figma.variables.getLocalVariablesAsync();
-let count = 0;
-for (const [name, value] of Object.entries(radii)) {
-  const existing = existingVars.find(v => v.name === 'radius/' + name);
-  if (!existing) {
-    const v = figma.variables.createVariable('radius/' + name, col, 'FLOAT');
-    v.setValueForMode(modeId, value);
-    count++;
+let primCol = cols.find(c => c.name === 'Radii/primitives');
+if (!primCol) primCol = figma.variables.createVariableCollection('Radii/primitives');
+let semCol = cols.find(c => c.name === 'Radii');
+if (!semCol) semCol = figma.variables.createVariableCollection('Radii');
+
+const primModeId = primCol.modes[0].modeId;
+const semModeId = semCol.modes[0].modeId;
+const existingVars = await figma.variables.getLocalVariablesAsync('FLOAT');
+const primVarMap = {};
+let primCount = 0;
+let semCount = 0;
+
+for (const [name, value] of Object.entries(primitiveRadii)) {
+  const varName = 'radius/' + name;
+  let v = existingVars.find(ev => ev.name === varName && ev.variableCollectionId === primCol.id);
+  if (!v) {
+    v = figma.variables.createVariable(varName, primCol, 'FLOAT');
+    primCount++;
+  }
+  v.setValueForMode(primModeId, value);
+  primVarMap[name] = v;
+}
+
+for (const [name, primitiveName] of Object.entries(semanticRadii)) {
+  let v = existingVars.find(ev => ev.name === name && ev.variableCollectionId === semCol.id);
+  if (!v) {
+    v = figma.variables.createVariable(name, semCol, 'FLOAT');
+    semCount++;
+  }
+  const primitiveVar = primVarMap[primitiveName];
+  if (primitiveVar) {
+    v.setValueForMode(semModeId, { type: 'VARIABLE_ALIAS', id: primitiveVar.id });
   }
 }
-return 'Created ' + count + ' radius variables';
+
+return JSON.stringify({ primCount, semCount });
 })()
 `;
 
     try {
-      const result = figmaUse(`eval "${code.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, { silent: true });
-      spinner.succeed(result?.trim() || 'Created border radii');
+      const result = await fastEval(code);
+      let details = { primCount: Object.keys(primitiveRadii).length, semCount: Object.keys(semanticRadii).length };
+      if (result) {
+        if (typeof result === 'string' && result.trim().startsWith('{')) {
+          details = { ...details, ...JSON.parse(result) };
+        } else if (typeof result === 'object') {
+          details = { ...details, ...result };
+        }
+      }
+      spinner.succeed(`Created ${details.primCount} radius primitives + ${details.semCount} semantic radius tokens`);
+      console.log(chalk.gray('\n  Collections updated:'));
+      console.log(chalk.gray('    • Radii/primitives - raw radius scale'));
+      console.log(chalk.gray('    • Radii - semantic radius aliases'));
     } catch (error) {
       spinner.fail('Failed to create radii');
+      console.error(chalk.red(error.message));
     }
   });
 
@@ -2927,6 +3540,7 @@ create
     checkConnection();
     const useSmartPos = options.smart || options.x === undefined;
     const usesVars = options.fill && isVarRef(options.fill);
+    await ensureVarRefsReady(collectVarRefsFromValues([options.fill]), 'create frame');
 
     const fillCode = options.fill ? generateFillCode(options.fill, 'frame') : null;
 
@@ -2962,6 +3576,7 @@ create
     const spinner = ora(`Fetching icon ${name}...`).start();
 
     try {
+      await ensureVarRefsReady(collectVarRefsFromValues([options.color]), 'create icon');
       // Parse icon name (prefix:name format)
       const [prefix, iconName] = name.includes(':') ? name.split(':') : ['lucide', name];
 
@@ -3806,6 +4421,7 @@ create
     const rectName = name || 'Rectangle';
     const useSmartPos = options.x === undefined;
     const usesVars = isVarRef(options.fill) || (options.stroke && isVarRef(options.stroke));
+    await ensureVarRefsReady(collectVarRefsFromValues([options.fill, options.stroke]), 'create rect');
 
     const fillCode = generateFillCode(options.fill, 'rect');
     const strokeCode = options.stroke ? generateStrokeCode(options.stroke, 'rect') : null;
@@ -3847,6 +4463,7 @@ create
     const height = options.height || options.width;
     const useSmartPos = options.x === undefined;
     const usesVars = isVarRef(options.fill) || (options.stroke && isVarRef(options.stroke));
+    await ensureVarRefsReady(collectVarRefsFromValues([options.fill, options.stroke]), 'create ellipse');
 
     const fillCode = generateFillCode(options.fill, 'ellipse');
     const strokeCode = options.stroke ? generateStrokeCode(options.stroke, 'ellipse') : null;
@@ -3887,6 +4504,7 @@ create
     const fontStyle = weightMap[options.weight.toLowerCase()] || 'Regular';
     const useSmartPos = options.x === undefined;
     const usesVars = isVarRef(options.color);
+    await ensureVarRefsReady(collectVarRefsFromValues([options.color]), 'create text');
 
     const fillCode = generateFillCode(options.color, 'text');
 
@@ -3927,6 +4545,7 @@ create
     const useSmartPos = options.x1 === undefined;
     const lineLength = parseFloat(options.length);
     const usesVars = isVarRef(options.color);
+    await ensureVarRefsReady(collectVarRefsFromValues([options.color]), 'create line');
 
     const strokeCode = generateStrokeCode(options.color, 'line', options.weight);
 
@@ -4010,6 +4629,7 @@ create
     const layoutMode = options.direction === 'col' ? 'VERTICAL' : 'HORIZONTAL';
     const useSmartPos = options.x === undefined;
     const usesVars = options.fill && isVarRef(options.fill);
+    await ensureVarRefsReady(collectVarRefsFromValues([options.fill, options.gap, options.padding]), 'create autolayout');
 
     const fillCode = options.fill ? generateFillCode(options.fill, 'frame') : null;
 
@@ -4971,6 +5591,8 @@ program
     const jsx = unescapeShell(rawJsx);
     await checkConnection();
     try {
+      await ensureVarRefsReady(extractVarRefs(jsx), 'render');
+
       // Calculate smart position if not specified
       let posX = options.x;
       let posY = options.y !== undefined ? options.y : 0;
@@ -5409,6 +6031,130 @@ program
         base64: result.base64
       }));
     }
+  });
+
+program
+  .command('doctor')
+  .description('Run a first-run health check with actionable setup guidance')
+  .action(async () => {
+    console.log(chalk.cyan('\n🩺 Figma Codex CLI Doctor\n'));
+
+    const health = await getConnectionHealth();
+    const nodeVersion = process.version;
+    const nodeMajor = parseInt(nodeVersion.slice(1).split('.')[0]);
+    const hasCodex = commandExists('codex');
+    const hasCurl = commandExists('curl');
+    const config = loadConfig();
+
+    console.log(chalk.bold('Environment'));
+    console.log(nodeMajor >= 18 ? chalk.green(`  ✓ Node.js ${nodeVersion}`) : chalk.red(`  ✗ Node.js ${nodeVersion} (need 18+)`));
+    console.log(hasCodex ? chalk.green('  ✓ codex CLI available') : chalk.yellow('  ○ codex CLI not found in PATH'));
+    console.log(hasCurl ? chalk.green('  ✓ curl available') : chalk.red('  ✗ curl not found in PATH'));
+    console.log(chalk.gray(`  Platform: ${platformName}`));
+
+    try {
+      const figmaVersion = getFigmaVersion();
+      console.log(chalk.green(`  ✓ Figma Desktop ${figmaVersion}`));
+    } catch {
+      console.log(chalk.red('  ✗ Figma Desktop not found'));
+    }
+
+    console.log();
+    console.log(chalk.bold('Connection'));
+    console.log(health.figmaRunning ? chalk.green('  ✓ Figma is running') : chalk.yellow('  ○ Figma is not running'));
+    console.log(health.cdpPort ? chalk.green('  ✓ Remote debugging port responds') : chalk.yellow('  ○ Remote debugging port is closed'));
+    console.log(health.daemon ? chalk.green(`  ✓ Daemon responding on port ${DAEMON_PORT}`) : chalk.yellow('  ○ Daemon not running'));
+    console.log(health.plugin ? chalk.green('  ✓ Safe Mode plugin connected') : chalk.gray('  • Safe Mode plugin not connected'));
+    console.log(health.cdp ? chalk.green('  ✓ Yolo Mode daemon path active') : chalk.gray('  • Yolo Mode daemon path not active'));
+    console.log(health.directConnection ? chalk.green('  ✓ Direct CDP connection available') : chalk.gray('  • Direct CDP connection not available yet'));
+
+    console.log();
+    console.log(chalk.bold('Local Config'));
+    console.log(config.patched ? chalk.green('  ✓ Yolo patch marked as configured') : chalk.gray('  • Yolo patch not marked as configured yet'));
+    if (config.autoBootstrapVarTokens) {
+      console.log(chalk.green(`  ✓ Token bootstrap preference: ${config.autoBootstrapVarTokens}`));
+    } else {
+      console.log(chalk.gray('  • Token bootstrap preference not set yet'));
+    }
+
+    console.log();
+    console.log(chalk.bold('Recommended Next Step'));
+    if (!health.figmaRunning) {
+      console.log(chalk.cyan('  Open Figma Desktop, then run: fig-start --safe'));
+    } else if (health.plugin || health.cdp || health.directConnection) {
+      console.log(chalk.green('  You are ready to run: node src/index.js smoke'));
+    } else if (!health.cdpPort) {
+      console.log(chalk.cyan('  Fastest path: fig-start --safe'));
+      console.log(chalk.gray('  Direct path: node src/index.js connect'));
+    } else {
+      console.log(chalk.cyan('  Run: node src/index.js connect'));
+    }
+
+    console.log();
+  });
+
+program
+  .command('smoke')
+  .description('Run a small end-to-end Figma smoke test in the current file')
+  .action(async () => {
+    console.log(chalk.cyan('\n🔥 Figma Smoke Test\n'));
+    await checkConnection();
+
+    const presetSpinner = ora('Refreshing token presets...').start();
+    try {
+      await fastEval(`(async () => {
+        return 'ok';
+      })()`);
+      execSync(`"${process.execPath}" "${CLI_FILE}" tokens preset shadcn`, { cwd: REPO_ROOT, stdio: 'ignore' });
+      execSync(`"${process.execPath}" "${CLI_FILE}" tokens spacing --preset power`, { cwd: REPO_ROOT, stdio: 'ignore' });
+      execSync(`"${process.execPath}" "${CLI_FILE}" tokens radii`, { cwd: REPO_ROOT, stdio: 'ignore' });
+      presetSpinner.succeed('Token presets ready');
+    } catch (e) {
+      presetSpinner.fail('Failed to prepare token presets');
+      console.log(chalk.red(e.message));
+      return;
+    }
+
+    const renderSpinner = ora('Rendering smoke card...').start();
+    let renderResult;
+    const smokeJsx = `<Frame name="Codex Smoke Test Card" w={560} bg="var:card" stroke="var:border" strokeWidth={1} rounded="var:radius/card" flex="col" gap="var:space/lg" p="var:space/lg"><Text size={12} weight="medium" color="var:muted-foreground">Smoke Test</Text><Text size={22} weight="bold" color="var:foreground">CLI is connected and rendering</Text><Text size={15} color="var:muted-foreground">This card verifies tokens, layout bindings, and rendering in the active connection mode.</Text><Frame flex="row" gap="var:space/md" bg="var:card"><Frame bg="var:primary" px="var:space/lg" py="var:space/sm" rounded="var:radius/button"><Text color="var:primary-foreground">Primary</Text></Frame><Frame bg="var:secondary" px="var:space/lg" py="var:space/sm" rounded="var:radius/button" stroke="var:border" strokeWidth={1}><Text color="var:secondary-foreground">Secondary</Text></Frame></Frame></Frame>`;
+    try {
+      renderResult = await fastRender(smokeJsx);
+      renderSpinner.succeed(`Rendered smoke card${renderResult?.id ? ` (${renderResult.id})` : ''}`);
+    } catch (e) {
+      renderSpinner.fail('Render failed');
+      console.log(chalk.red(e.message));
+      return;
+    }
+
+    if (renderResult?.id) {
+      const verifySpinner = ora('Verifying rendered node...').start();
+      try {
+        const verify = await fastEval(`(async () => {
+          const node = await figma.getNodeByIdAsync(${JSON.stringify(renderResult.id)});
+          if (!node) return null;
+          return {
+            id: node.id,
+            name: node.name,
+            type: node.type,
+            width: node.width,
+            height: node.height,
+            childCount: 'children' in node ? node.children.length : 0
+          };
+        })()`);
+        if (verify?.id) {
+          verifySpinner.succeed(`Verified ${verify.name} (${verify.width}x${verify.height})`);
+        } else {
+          verifySpinner.warn('Node created but verification returned no details');
+        }
+      } catch (e) {
+        verifySpinner.fail('Verification failed');
+        console.log(chalk.red(e.message));
+        return;
+      }
+    }
+
+    console.log(chalk.green('\n✓ Smoke test completed successfully\n'));
   });
 
 // ============ EVAL ============

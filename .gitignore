@@ -1,6 +1,16 @@
 .DS_Store
 *.log
+*.pid
 DEV-NOTES.md
 node_modules/
 .figma-client-*.mjs
 screenshot.png
+coverage/
+.nyc_output/
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.codex/
+nul

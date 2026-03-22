@@ -70,6 +70,12 @@ figma-ds-cli fj sticky "Note" -p "My Board" -x 100 -y 100
 # Initial setup (patches Figma, installs dependencies)
 figma-ds-cli
 
+# First-run health check
+figma-ds-cli doctor
+
+# End-to-end smoke test in current file
+figma-ds-cli smoke
+
 # Connect to running Figma
 figma-ds-cli connect
 ```
@@ -83,12 +89,28 @@ figma-ds-cli tokens ds
 # Tailwind CSS colors (220 variables)
 figma-ds-cli tokens tailwind
 
+# shadcn semantic palette
+figma-ds-cli tokens preset shadcn
+
+# Dark semantic palette
+figma-ds-cli tokens preset dark
+
 # Spacing scale (4px base)
 figma-ds-cli tokens spacing
+
+# Power-style spacing preset with Compact/Comfortable modes
+figma-ds-cli tokens spacing --preset power
+
+# Switch the active theme or spacing mode
+figma-ds-cli tokens mode theme dark
+figma-ds-cli tokens mode spacing comfortable
 
 # Border radii
 figma-ds-cli tokens radii
 ```
+
+Commands that use `var:` bindings ask before bootstrapping missing local color or spacing presets. New users have to opt in the first time.
+Missing `var:radius/...` references are handled by the same first-run bootstrap prompt.
 
 ## Variables
 
