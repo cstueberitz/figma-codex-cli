@@ -295,7 +295,7 @@ node src/index.js connect
 
 ```
 ┌─────────────┐     WebSocket     ┌─────────────┐     Plugin API     ┌─────────────┐
-│     CLI     │ <---------------> │   Daemon    │ <----------------> │   Plugin    │
+│     CLI     │ <---------------> │    Daemon   │ <----------------> │   Plugin    │
 └─────────────┘   localhost:3456  └─────────────┘                    └─────────────┘
 ```
 
@@ -413,10 +413,10 @@ npm install
 Connects to Figma Desktop via Chrome DevTools Protocol (CDP). No API key needed because it uses your existing Figma session.
 
 ```
-┌─────────────┐      WebSocket (CDP)      ┌─────────────┐
-│ figma-ds-cli │ <------------------------> │   Figma     │
-│    (CLI)    │   localhost:9222-9322     │  Desktop    │
-└─────────────┘      (random port)        └─────────────┘
+┌───────────────┐      WebSocket (CDP)        ┌─────────────┐
+│ figma-ds-cli  │ <------------------------>  │  Figma      │
+│     (CLI)     │   localhost:9222-9322       │  Desktop    │
+└───────────────┘      (random port)          └─────────────┘
 ```
 
 ### Security
