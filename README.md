@@ -268,9 +268,9 @@ Icons support:
 - Needs Full Disk Access on macOS (one-time)
 
 ```
-┌─────────────┐      WebSocket (CDP)      ┌─────────────┐
-│     CLI     │ <------------------------> │   Figma     │
-└─────────────┘    localhost:random port  └─────────────┘
+┌─────────────┐      WebSocket (CDP)       ┌─────────────┐
+│     CLI     │ <------------------------> │    Figma    │
+└─────────────┘    localhost:random port   └─────────────┘
 ```
 
 ```bash
