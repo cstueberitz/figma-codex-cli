@@ -163,7 +163,7 @@ Uses plugin, no Figma modification. Start plugin each session.
 ```bash
 node src/index.js connect --safe
 ```
-Then: Plugins → Development → FigCli
+Then: Plugins → Development → Figma Codex CLI
 
 **Safe Mode Notes:**
 - All commands work via daemon (no figma-use dependency)

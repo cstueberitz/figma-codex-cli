@@ -22,6 +22,10 @@ import {
   getFigmaVersion, isFigmaRunning, platformName
 } from './platform.js';
 
+const CLI_FILE = fileURLToPath(import.meta.url);
+const CLI_DIR = dirname(CLI_FILE);
+const REPO_ROOT = dirname(CLI_DIR);
+
 // Fix zsh shell escaping: zsh escapes ! to \! even in single quotes
 function unescapeShell(str) {
   if (!str) return str;
@@ -389,7 +393,7 @@ function figmaEvalSync(code) {
   const resultFile = join(tmpdir(), `figma-result-${Date.now()}.json`);
 
   // Use file:// URL for ESM import (cross-platform)
-  const clientUrl = pathToFileURL(join(process.cwd(), 'src/figma-client.js')).href;
+  const clientUrl = pathToFileURL(join(CLI_DIR, 'figma-client.js')).href;
   const resultPath = resultFile.replace(/\\/g, '\\\\');
 
   const script = `
@@ -1035,17 +1039,17 @@ program
 
       // Show plugin setup instructions
       console.log(chalk.hex('#FF6B35')('\n  ┌─────────────────────────────────────────────────────┐'));
-      console.log(chalk.hex('#FF6B35')('  │') + chalk.white.bold('  Setup the FigCli plugin                           ') + chalk.hex('#FF6B35')('│'));
+      console.log(chalk.hex('#FF6B35')('  │') + chalk.white.bold('  Setup the Figma Codex CLI plugin                 ') + chalk.hex('#FF6B35')('│'));
       console.log(chalk.hex('#FF6B35')('  └─────────────────────────────────────────────────────┘\n'));
 
       console.log(chalk.white.bold('  ONE-TIME SETUP:\n'));
       console.log(chalk.cyan('  1. ') + chalk.white('Open Figma Desktop and any design file'));
       console.log(chalk.cyan('  2. ') + chalk.white('Go to ') + chalk.yellow('Plugins → Development → Import plugin from manifest'));
-      console.log(chalk.cyan('  3. ') + chalk.white('Navigate to: ') + chalk.yellow(process.cwd() + '/plugin/manifest.json'));
+      console.log(chalk.cyan('  3. ') + chalk.white('Navigate to: ') + chalk.yellow(join(REPO_ROOT, 'plugin/manifest.json')));
       console.log(chalk.cyan('  4. ') + chalk.white('Click ') + chalk.yellow('Open') + chalk.white(' — plugin is now installed!\n'));
 
       console.log(chalk.white.bold('  EACH SESSION:\n'));
-      console.log(chalk.cyan('  → ') + chalk.white('In Figma: ') + chalk.yellow('Plugins → Development → FigCli\n'));
+      console.log(chalk.cyan('  → ') + chalk.white('In Figma: ') + chalk.yellow('Plugins → Development → Figma Codex CLI\n'));
 
       console.log(chalk.gray('  💡 Tip: Right-click plugin → "Add to toolbar" for one-click access\n'));
 

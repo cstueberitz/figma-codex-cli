@@ -226,7 +226,7 @@ Once the connection is up, try prompts like:
 
 The included `AGENTS.md` teaches Codex all commands automatically. No manual required.
 
-**Safe Mode users:** Start the FigCli plugin each time you open Figma.
+**Safe Mode users:** Start the Figma Codex CLI plugin each time you open Figma.
 
 ---
 
@@ -311,7 +311,7 @@ Or manually: `node src/index.js connect --safe`
 3. Click **Open**
 
 **Step 3:** Start the plugin (each session)
-1. In Figma: **Plugins -> Development -> FigCli**
+1. In Figma: **Plugins -> Development -> Figma Codex CLI**
 2. Terminal shows: `Plugin connected!`
 
 **Tip:** Right-click the plugin -> **Add to toolbar** for quick access.
